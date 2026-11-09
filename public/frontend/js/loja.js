@@ -1550,7 +1550,10 @@
             #gFinanceiro .tc-legend-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
             #gFinanceiro .tc-pie-wrap{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;padding:12px 0;min-height:210px}
             #gFinanceiro .tc-pie{width:174px;height:174px;border-radius:50%;position:relative;flex:0 0 174px;box-shadow:0 0 0 1px var(--fin-border)}
-            #gFinanceiro .tc-pie:after{content:"";position:absolute;inset:29%;background:var(--fin-card)!important;border-radius:50%;box-shadow:0 0 0 1px var(--fin-border)}
+            #gFinanceiro .tc-pie svg{display:block;width:100%;height:100%;overflow:visible}
+            #gFinanceiro .tc-pie-slice{cursor:help;transition:filter .15s,opacity .15s;outline:none}
+            #gFinanceiro .tc-pie-slice:hover,#gFinanceiro .tc-pie-slice:focus{filter:brightness(1.18);stroke:var(--fin-text);stroke-width:2.5}
+            #gFinanceiro .tc-pie:after{content:"";position:absolute;inset:29%;background:var(--fin-card)!important;border-radius:50%;box-shadow:0 0 0 1px var(--fin-border);pointer-events:none}
             #gFinanceiro .tc-pie-center{position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;pointer-events:none}
             #gFinanceiro .tc-pie-center strong{font-size:1.2rem;color:var(--fin-text)!important}
             #gFinanceiro .tc-pie-center span{font-size:.68rem;color:var(--fin-muted)!important}
@@ -1871,7 +1874,32 @@
           return {p,i,percentual,inicio,fim:acumulado};
         });
         const gradiente=fatias.map(f=>cores[f.i]+" "+f.inicio.toFixed(2)+"% "+f.fim.toFixed(2)+"%").join(",");
-        const donut=h("div",{class:"tc-pie",style:"background:conic-gradient("+gradiente+")"});
+        const donut=h("div",{class:"tc-pie"});
+        const svgNS="http://www.w3.org/2000/svg";
+        const svg=document.createElementNS(svgNS,"svg");
+        svg.setAttribute("viewBox","0 0 190 190");
+        svg.setAttribute("role","img");
+        svg.setAttribute("aria-label","Gráfico de participação dos produtos mais vendidos");
+        fatias.forEach(f=>{
+          const ang1=(-90+f.inicio*3.6)*Math.PI/180;
+          const ang2=(-90+f.fim*3.6)*Math.PI/180;
+          const x1=95+85*Math.cos(ang1),y1=95+85*Math.sin(ang1);
+          const x2=95+85*Math.cos(ang2),y2=95+85*Math.sin(ang2);
+          const grande=f.percentual>50?1:0;
+          const path=document.createElementNS(svgNS,"path");
+          path.setAttribute("d","M 95 95 L "+x1.toFixed(2)+" "+y1.toFixed(2)+" A 85 85 0 "+grande+" 1 "+x2.toFixed(2)+" "+y2.toFixed(2)+" Z");
+          path.setAttribute("fill",cores[f.i]);
+          path.setAttribute("stroke","var(--fin-card)");
+          path.setAttribute("stroke-width","1.5");
+          path.setAttribute("class","tc-pie-slice");
+          path.setAttribute("tabindex","0");
+          path.setAttribute("aria-label",f.p.nome+": "+f.percentual.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%");
+          const title=document.createElementNS(svgNS,"title");
+          title.textContent=f.p.nome+": "+f.percentual.toLocaleString("pt-BR",{maximumFractionDigits:1})+"% ("+Number(f.p.quantidade).toLocaleString("pt-BR")+" unidades)";
+          path.append(title);
+          svg.append(path);
+        });
+        donut.append(svg);
         donut.append(h("div",{class:"tc-pie-center"},h("strong",{},totalVendidos.toLocaleString("pt-BR")),h("span",{},"unidades vendidas")));
         const legenda=h("div",{class:"tc-pie-legend"});
         fatias.forEach(f=>{
@@ -2301,7 +2329,7 @@
                   "Itens"
                 ),
                 p.status === "pendente" && [
-                  h(
+                  p.pagamento_metodo !== "pix" ? h(
                     "button",
                     {
                       class: "btn btn-sm btn-success me-1",
@@ -2314,7 +2342,7 @@
                       onclick: () => mudarStatus(p.id, "aprovado"),
                     },
                     "Aprovar"
-                  ),
+                  ) : null,
                   h(
                     "button",
                     {
