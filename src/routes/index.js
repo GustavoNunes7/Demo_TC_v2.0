@@ -859,7 +859,7 @@ r.post("/pagamentos/:id/confirmar-simulado", autenticar, (req, res) => {
 
   res.json(get("pagamentos", pagamento.id));
 });
-r.post("/admin/pagamentos/:id/confirmar-presencial", autenticar, admin, (req, res) => {
+const confirmarPagamentoPresencial = (req, res) => {
   const pagamento = get("pagamentos", positiveId(req.params.id));
   if (!pagamento) return res.status(404).json({ erro: "Pagamento não encontrado." });
   if (!["dinheiro", "cartao"].includes(pagamento.metodo))
@@ -871,9 +871,10 @@ r.post("/admin/pagamentos/:id/confirmar-presencial", autenticar, admin, (req, re
     return bad(res, "Este pedido não está aguardando confirmação.");
 
   db.transaction(() => {
-    db.prepare("UPDATE pagamentos SET status='confirmado' WHERE id=? AND status='pendente'").run(pagamento.id);
-    let token = db.prepare("SELECT id FROM tokens_retirada WHERE pedido_id=?").get(pedido.id);
-    if (!token) {
+    const atualizacao = db.prepare("UPDATE pagamentos SET status='confirmado' WHERE id=? AND status='pendente'").run(pagamento.id);
+    if (!atualizacao.changes) throw new Error("Pagamento já processado.");
+    const existente = db.prepare("SELECT id FROM tokens_retirada WHERE pedido_id=?").get(pedido.id);
+    if (!existente) {
       let codigo;
       do { codigo = String(crypto.randomInt(100000, 1000000)); }
       while (db.prepare("SELECT id FROM tokens_retirada WHERE token=?").get(codigo));
@@ -885,8 +886,9 @@ r.post("/admin/pagamentos/:id/confirmar-presencial", autenticar, admin, (req, re
   db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)")
     .run(pedido.usuario_id, "Pagamento presencial confirmado", `O pagamento do pedido #${pedido.id} foi confirmado. Seu token de retirada está disponível por 15 minutos.`);
   res.json({ pagamento: get("pagamentos", pagamento.id), pedido: get("pedidos", pedido.id) });
-});
-
+};
+r.post("/admin/pagamentos/:id/confirmar-presencial", autenticar, admin, confirmarPagamentoPresencial);
+r.post("/pagamentos/:id/confirmar-presencial", autenticar, admin, confirmarPagamentoPresencial);
 r.patch("/pedidos/:id/status", autenticar, admin, (req, res) => {
   const p = get("pedidos", positiveId(req.params.id)),
     status = req.body.status;
