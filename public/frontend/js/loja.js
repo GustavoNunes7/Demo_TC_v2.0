@@ -969,9 +969,12 @@
     pagamento: null,
     pago: false,
     token: null,
+    chaveIdempotencia: null,
+    enviando: false,
   };
 
   async function finalizarCarrinho() {
+    if (estadoCompra.enviando) return;
     if (!carrinho.length) {
       setMsg($("carrinhoMsg"), "Carrinho vazio!");
       return;
@@ -991,12 +994,19 @@
     }
 
     const btn = document.querySelector(".modal-footer button:last-child");
+    estadoCompra.enviando = true;
+    if (!estadoCompra.chaveIdempotencia) {
+      estadoCompra.chaveIdempotencia = globalThis.crypto?.randomUUID
+        ? crypto.randomUUID()
+        : `tc-${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    }
     if (btn) btn.disabled = true;
 
     try {
       // 1) Criar pedido com todos os itens do carrinho
       estadoCompra.pedido = await api("/pedidos", {
         method: "POST",
+        headers: { "Idempotency-Key": estadoCompra.chaveIdempotencia },
         body: JSON.stringify({
           itens: carrinho.map((item) => ({
             produto_id: item.produto_id,
@@ -1028,6 +1038,7 @@
       modalCarrinho.hide();
       setTimeout(() => mostrarTelaPagamento(), 300);
     } catch (e) {
+      estadoCompra.enviando = false;
       setMsg($("carrinhoMsg"), e.message);
       if (btn) btn.disabled = false;
     }
@@ -1078,6 +1089,8 @@
       pagamento: null,
       pago: false,
       token: null,
+      chaveIdempotencia: null,
+      enviando: false,
     };
   }
 
