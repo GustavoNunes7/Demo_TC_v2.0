@@ -174,24 +174,63 @@ r.post(
 r.get("/perfil", autenticar, (req, res) => {
   const u = get("usuarios", req.usuario.id);
   if (!u) return res.sendStatus(401);
-  res.json({ ...publicUser(u), foto_url: u.foto_url || null });
+  res.json({
+    ...publicUser(u),
+    foto_url: u.foto_url || null,
+    data_nascimento: u.data_nascimento || "",
+    cpf: u.cpf || "",
+    genero: u.genero || "",
+    observacao: u.observacao || "",
+  });
 });
 r.patch("/perfil", autenticar, (req, res) => {
   const u = get("usuarios", req.usuario.id);
   if (!u) return res.sendStatus(401);
-  const nome = req.body.nome === undefined ? u.nome : clean(req.body.nome, 100),
-    email = req.body.email === undefined ? u.email : clean(req.body.email, 254).toLowerCase(),
-    turma = req.body.turma === undefined ? u.turma : clean(req.body.turma, 60),
-    telefone = req.body.telefone === undefined ? u.telefone : clean(req.body.telefone, 25),
-    fotoUrl = req.body.foto_url === undefined ? (u.foto_url || null) : clean(req.body.foto_url, 500);
+
+  // Alunos só podem atualizar os campos expressamente liberados.
+  if (u.papel === "aluno") {
+    const camposProtegidos = ["nome", "email", "turma", "data_nascimento", "cpf", "papel", "ativo", "foto_url"];
+    if (camposProtegidos.some((campo) => Object.prototype.hasOwnProperty.call(req.body, campo))) {
+      return res.status(403).json({ erro: "Alunos não podem alterar dados cadastrais protegidos." });
+    }
+    const telefone = req.body.telefone === undefined ? u.telefone : clean(req.body.telefone, 25);
+    const genero = req.body.genero === undefined ? (u.genero || "") : req.body.genero;
+    const observacao = req.body.observacao === undefined ? (u.observacao || "") : clean(req.body.observacao, 1000);
+    if (!allowed(genero, ["", "masculino", "feminino", "nao_informar", "outro"])) return bad(res, "Gênero inválido.");
+    db.prepare("UPDATE usuarios SET telefone=?,genero=?,observacao=? WHERE id=?").run(telefone, genero, observacao, u.id);
+    const atualizado = get("usuarios", u.id);
+    return res.json({
+      ...publicUser(atualizado),
+      foto_url: atualizado.foto_url || null,
+      data_nascimento: atualizado.data_nascimento || "",
+      cpf: atualizado.cpf || "",
+      genero: atualizado.genero || "",
+      observacao: atualizado.observacao || "",
+    });
+  }
+
+  // Administradores mantêm a edição completa do próprio cadastro.
+  const nome = req.body.nome === undefined ? u.nome : clean(req.body.nome, 100);
+  const email = req.body.email === undefined ? u.email : clean(req.body.email, 254).toLowerCase();
+  const turma = req.body.turma === undefined ? u.turma : clean(req.body.turma, 60);
+  const telefone = req.body.telefone === undefined ? u.telefone : clean(req.body.telefone, 25);
+  const dataNascimento = req.body.data_nascimento === undefined ? (u.data_nascimento || "") : clean(req.body.data_nascimento, 10);
+  const cpf = req.body.cpf === undefined ? (u.cpf || "") : clean(req.body.cpf, 14);
+  const genero = req.body.genero === undefined ? (u.genero || "") : req.body.genero;
+  const observacao = req.body.observacao === undefined ? (u.observacao || "") : clean(req.body.observacao, 1000);
+  const fotoUrl = req.body.foto_url === undefined ? (u.foto_url || null) : clean(req.body.foto_url, 500);
   if (nome.length < 2) return bad(res, "Nome inválido.");
   if (!validEmail(email)) return bad(res, "E-mail inválido.");
+  if (dataNascimento && (!/^\d{4}-\d{2}-\d{2}$/.test(dataNascimento) || !Number.isFinite(Date.parse(dataNascimento + "T12:00:00")))) return bad(res, "Data de nascimento inválida.");
+  if (cpf && !/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(cpf) && !/^\d{11}$/.test(cpf)) return bad(res, "CPF inválido.");
+  if (!allowed(genero, ["", "masculino", "feminino", "nao_informar", "outro"])) return bad(res, "Gênero inválido.");
   const outro = db.prepare("SELECT id FROM usuarios WHERE email=? AND id<>?").get(email, u.id);
   if (outro) return res.status(409).json({ erro: "Este e-mail já está em uso." });
-  db.prepare("UPDATE usuarios SET nome=?,email=?,turma=?,telefone=?,foto_url=? WHERE id=?").run(
-    nome, email, turma, telefone, fotoUrl, u.id,
+  db.prepare("UPDATE usuarios SET nome=?,email=?,turma=?,telefone=?,foto_url=?,data_nascimento=?,cpf=?,genero=?,observacao=? WHERE id=?").run(
+    nome, email, turma, telefone, fotoUrl, dataNascimento || null, cpf || null, genero || null, observacao || null, u.id,
   );
-  res.json({ ...publicUser(get("usuarios", u.id)), foto_url: fotoUrl });
+  const atualizado = get("usuarios", u.id);
+  res.json({ ...publicUser(atualizado), foto_url: atualizado.foto_url || null, data_nascimento: atualizado.data_nascimento || "", cpf: atualizado.cpf || "", genero: atualizado.genero || "", observacao: atualizado.observacao || "" });
 });
 // Encerramento de conta: desativa o acesso sem apagar o histórico acadêmico/financeiro.
 r.delete("/perfil", autenticar, wrap(async (req, res) => {
@@ -210,7 +249,7 @@ r.get("/usuarios", autenticar, admin, (_req, res) =>
   res.json(
     db
       .prepare(
-        "SELECT id,nome,email,papel,turma,telefone,ativo,foto_url,criado_em FROM usuarios ORDER BY id DESC",
+        "SELECT id,nome,email,papel,turma,telefone,data_nascimento,cpf,genero,observacao,ativo,foto_url,criado_em FROM usuarios ORDER BY id DESC",
       )
       .all(),
   ),
@@ -232,7 +271,14 @@ r.post("/usuarios", autenticar, admin, wrap(async (req, res) => {
   if (nome.length < 2 || !validEmail(email) || typeof senha !== "string" || senha.length < 5 || senha.length > 128 || !allowed(papel, ["aluno", "admin"])) return bad(res, "Informe nome, e-mail válido, senha de 5 a 128 caracteres e perfil válido.");
   if (db.prepare("SELECT id FROM usuarios WHERE email=?").get(email)) return res.status(409).json({ erro: "E-mail já cadastrado." });
   const hash = await bcrypt.hash(senha, 12);
-  const info = db.prepare("INSERT INTO usuarios(nome,email,senha_hash,papel,turma,telefone) VALUES(?,?,?,?,?,?)").run(nome,email,hash,papel,clean(req.body.turma,60),clean(req.body.telefone,25));
+  const dataNascimento = clean(req.body.data_nascimento, 10);
+  const cpf = clean(req.body.cpf, 14);
+  const genero = req.body.genero || "";
+  const observacao = clean(req.body.observacao, 1000);
+  if (dataNascimento && (!/^\d{4}-\d{2}-\d{2}$/.test(dataNascimento) || !Number.isFinite(Date.parse(dataNascimento + "T12:00:00")))) return bad(res, "Data de nascimento inválida.");
+  if (cpf && !/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(cpf) && !/^\d{11}$/.test(cpf)) return bad(res, "CPF inválido.");
+  if (!allowed(genero, ["", "masculino", "feminino", "nao_informar", "outro"])) return bad(res, "Gênero inválido.");
+  const info = db.prepare("INSERT INTO usuarios(nome,email,senha_hash,papel,turma,telefone,data_nascimento,cpf,genero,observacao) VALUES(?,?,?,?,?,?,?,?,?,?)").run(nome,email,hash,papel,clean(req.body.turma,60),clean(req.body.telefone,25),dataNascimento || null,cpf || null,genero || null,observacao || null);
   res.status(201).json(publicUser(get("usuarios", info.lastInsertRowid)));
 }));
 r.patch("/usuarios/:id", autenticar, admin, wrap(async (req, res) => {
@@ -242,18 +288,25 @@ r.patch("/usuarios/:id", autenticar, admin, wrap(async (req, res) => {
   const email = req.body.email === undefined ? u.email : clean(req.body.email, 254).toLowerCase();
   const turma = req.body.turma === undefined ? u.turma : clean(req.body.turma, 60);
   const telefone = req.body.telefone === undefined ? u.telefone : clean(req.body.telefone, 25);
+  const dataNascimento = req.body.data_nascimento === undefined ? (u.data_nascimento || "") : clean(req.body.data_nascimento, 10);
+  const cpf = req.body.cpf === undefined ? (u.cpf || "") : clean(req.body.cpf, 14);
+  const genero = req.body.genero === undefined ? (u.genero || "") : req.body.genero;
+  const observacao = req.body.observacao === undefined ? (u.observacao || "") : clean(req.body.observacao, 1000);
   const papel = req.body.papel === undefined ? u.papel : req.body.papel;
   const ativo = req.body.ativo === undefined ? u.ativo : (req.body.ativo === false || req.body.ativo === 0 ? 0 : 1);
   if (nome.length < 2 || !validEmail(email) || !allowed(papel, ["aluno", "admin"])) return bad(res, "Dados de usuário inválidos.");
+  if (dataNascimento && (!/^\d{4}-\d{2}-\d{2}$/.test(dataNascimento) || !Number.isFinite(Date.parse(dataNascimento + "T12:00:00")))) return bad(res, "Data de nascimento inválida.");
+  if (cpf && !/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(cpf) && !/^\d{11}$/.test(cpf)) return bad(res, "CPF inválido.");
+  if (!allowed(genero, ["", "masculino", "feminino", "nao_informar", "outro"])) return bad(res, "Gênero inválido.");
   if (db.prepare("SELECT id FROM usuarios WHERE email=? AND id<>?").get(email, id)) return res.status(409).json({ erro: "E-mail já cadastrado." });
   if (u.id === req.usuario.id && (papel !== "admin" || !ativo)) return bad(res, "Você não pode desativar ou rebaixar sua própria conta administrativa.");
-  let sql = "UPDATE usuarios SET nome=?,email=?,turma=?,telefone=?,papel=?,ativo=? WHERE id=?";
-  const args = [nome,email,turma,telefone,papel,ativo,id];
+  let sql = "UPDATE usuarios SET nome=?,email=?,turma=?,telefone=?,data_nascimento=?,cpf=?,genero=?,observacao=?,papel=?,ativo=? WHERE id=?";
+  const args = [nome,email,turma,telefone,dataNascimento || null,cpf || null,genero || null,observacao || null,papel,ativo,id];
   if (req.body.senha) {
     if (typeof req.body.senha !== "string" || req.body.senha.length < 5 || req.body.senha.length > 128) return bad(res, "A senha deve ter de 5 a 128 caracteres.");
     const hash = await bcrypt.hash(req.body.senha, 12);
-    sql = "UPDATE usuarios SET nome=?,email=?,turma=?,telefone=?,papel=?,ativo=?,senha_hash=? WHERE id=?";
-    args.splice(6, 0, hash);
+    sql = "UPDATE usuarios SET nome=?,email=?,turma=?,telefone=?,data_nascimento=?,cpf=?,genero=?,observacao=?,papel=?,ativo=?,senha_hash=? WHERE id=?";
+    args.splice(10, 0, hash);
   }
   db.prepare(sql).run(...args);
   const atualizado = get("usuarios", id);
