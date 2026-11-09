@@ -840,36 +840,54 @@ r.post("/pagamentos/:id/confirmar-simulado", autenticar, (req, res) => {
 
   res.json(get("pagamentos", pagamento.id));
 });
-const confirmarPagamentoPresencial = (req, res) => {
-  const pagamento = get("pagamentos", positiveId(req.params.id));
-  if (!pagamento) return res.status(404).json({ erro: "Pagamento não encontrado." });
+// Confirmação administrativa baseada no ID do PEDIDO (não no ID do pagamento).
+r.post("/admin/pedidos/:id/confirmar", autenticar, admin, (req, res) => {
+  const pedidoId = positiveId(req.params.id);
+  const pedido = get("pedidos", pedidoId);
+  if (!pedido) return res.status(404).json({ erro: "Pedido não encontrado." });
+  if (pedido.status !== "pendente") return bad(res, "Este pedido não está pendente.");
+
+  const pagamento = db.prepare("SELECT * FROM pagamentos WHERE pedido_id=?").get(pedidoId);
+  if (!pagamento) return res.status(404).json({ erro: "Este pedido ainda não possui pagamento registrado." });
   if (!["dinheiro", "cartao"].includes(pagamento.metodo))
-    return bad(res, "Somente dinheiro e cartão exigem confirmação presencial.");
-  if (pagamento.status !== "pendente")
-    return bad(res, "Este pagamento já foi processado.");
-  const pedido = get("pedidos", pagamento.pedido_id);
-  if (!pedido || pedido.status !== "pendente")
-    return bad(res, "Este pedido não está aguardando confirmação.");
+    return bad(res, "Somente pagamentos presenciais precisam de confirmação.");
+  if (pagamento.status !== "pendente") return bad(res, "Este pagamento já foi processado.");
 
   db.transaction(() => {
-    const atualizacao = db.prepare("UPDATE pagamentos SET status='confirmado' WHERE id=? AND status='pendente'").run(pagamento.id);
-    if (!atualizacao.changes) throw new Error("Pagamento já processado.");
-    const existente = db.prepare("SELECT id FROM tokens_retirada WHERE pedido_id=?").get(pedido.id);
-    if (!existente) {
+    const confirmado = db.prepare(
+      "UPDATE pagamentos SET status='confirmado' WHERE pedido_id=? AND status='pendente'"
+    ).run(pedidoId);
+    if (confirmado.changes !== 1) throw new Error("O pagamento já foi processado ou não está mais pendente.");
+
+    const aprovado = db.prepare(
+      "UPDATE pedidos SET status='aprovado' WHERE id=? AND status='pendente'"
+    ).run(pedidoId);
+    if (aprovado.changes !== 1) throw new Error("O pedido já foi processado.");
+
+    const tokenExistente = db.prepare("SELECT id FROM tokens_retirada WHERE pedido_id=?").get(pedidoId);
+    if (!tokenExistente) {
       let codigo;
-      do { codigo = String(crypto.randomInt(100000, 1000000)); }
-      while (db.prepare("SELECT id FROM tokens_retirada WHERE token=?").get(codigo));
+      do {
+        codigo = String(crypto.randomInt(100000, 1000000));
+      } while (db.prepare("SELECT id FROM tokens_retirada WHERE token=?").get(codigo));
       db.prepare("INSERT INTO tokens_retirada(pedido_id,token,expira_em) VALUES(?,?,?)")
-        .run(pedido.id, codigo, Date.now() + 15 * 60 * 1000);
+        .run(pedidoId, codigo, Date.now() + 15 * 60 * 1000);
     }
-    db.prepare("UPDATE pedidos SET status='aprovado' WHERE id=? AND status='pendente'").run(pedido.id);
   })();
+
   db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)")
-    .run(pedido.usuario_id, "Pagamento presencial confirmado", `O pagamento do pedido #${pedido.id} foi confirmado. Seu token de retirada está disponível por 15 minutos.`);
-  res.json({ pagamento: get("pagamentos", pagamento.id), pedido: get("pedidos", pedido.id) });
-};
-r.post("/admin/pagamentos/:id/confirmar-presencial", autenticar, admin, confirmarPagamentoPresencial);
-r.post("/pagamentos/:id/confirmar-presencial", autenticar, admin, confirmarPagamentoPresencial);
+    .run(pedido.usuario_id, "Pagamento confirmado", `O pagamento do pedido #${pedidoId} foi confirmado. Seu token de retirada está disponível por 15 minutos.`);
+  res.json({ ok: true, pedido: get("pedidos", pedidoId), pagamento: get("pagamentos", pagamento.id) });
+});
+
+// Compatibilidade com a rota antiga: o parâmetro continua sendo ID do pagamento.
+r.post("/admin/pagamentos/:id/confirmar-presencial", autenticar, admin, (req, res) => {
+  const pagamento = get("pagamentos", positiveId(req.params.id));
+  if (!pagamento) return res.status(404).json({ erro: "Pagamento não encontrado." });
+  req.params.id = String(pagamento.pedido_id);
+  return r.handle ? res.status(410).json({ erro: "Use a confirmação pelo pedido." }) : res.status(410).end();
+});
+
 r.patch("/pedidos/:id/status", autenticar, admin, (req, res) => {
   const p = get("pedidos", positiveId(req.params.id)),
     status = req.body.status;
@@ -897,6 +915,9 @@ r.patch("/pedidos/:id/status", autenticar, admin, (req, res) => {
           i.produto_id,
         );
     db.prepare("UPDATE pedidos SET status=? WHERE id=?").run(status, p.id);
+    if (status === "rejeitado" || status === "cancelado") {
+      db.prepare("UPDATE pagamentos SET status='cancelado' WHERE pedido_id=? AND status='pendente'").run(p.id);
+    }
   })();
   res.json(detalharPedido(p.id));
 });
