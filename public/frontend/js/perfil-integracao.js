@@ -230,7 +230,7 @@
     async function carregar() {
       try {
         usuarios = await api("/usuarios");
-        const existeLider = usuarios.some(u => u.admin_lider === true);
+        const existeLider = usuarios.some(u => Number(u.admin_lider) === 1);
         let assumir = document.getElementById("btnAssumirLideranca");
         if (!existeLider && !assumir) {
           assumir = document.createElement("button");
@@ -298,7 +298,7 @@
             catch (e) { mostrarErro(e.message); }
           });
           acoes.append(editar, statusBtn);
-          if (ehLider && u.papel === "admin") {
+          if (ehLider && u.papel === "admin" && u.ativo !== 0) {
             const transferir = document.createElement("button"); transferir.type = "button"; transferir.className = "btn btn-sm btn-outline-warning ms-1"; transferir.textContent = "Tornar líder";
             transferir.addEventListener("click", async () => {
               if (!confirm(`Transferir a liderança para ${u.nome}? Você deixará de ser o Administrador Líder.`)) return;
