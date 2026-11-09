@@ -880,13 +880,6 @@ r.post("/admin/pedidos/:id/confirmar", autenticar, admin, (req, res) => {
   res.json({ ok: true, pedido: get("pedidos", pedidoId), pagamento: get("pagamentos", pagamento.id) });
 });
 
-// Compatibilidade com a rota antiga: o parâmetro continua sendo ID do pagamento.
-r.post("/admin/pagamentos/:id/confirmar-presencial", autenticar, admin, (req, res) => {
-  const pagamento = get("pagamentos", positiveId(req.params.id));
-  if (!pagamento) return res.status(404).json({ erro: "Pagamento não encontrado." });
-  req.params.id = String(pagamento.pedido_id);
-  return r.handle ? res.status(410).json({ erro: "Use a confirmação pelo pedido." }) : res.status(410).end();
-});
 
 r.patch("/pedidos/:id/status", autenticar, admin, (req, res) => {
   const p = get("pedidos", positiveId(req.params.id)),
