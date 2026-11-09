@@ -2035,16 +2035,17 @@
                     "Rejeitar"
                   ),
                 ],
-                p.status === "aprovado" &&
-                  h(
-                    "button",
-                    {
-                      class: "btn btn-sm btn-info",
-                      type: "button",
-                      onclick: () => mudarStatus(p.id, "entregue"),
-                    },
-                    "Marcar entregue"
-                  )
+                p.status === "aprovado"
+                  ? h(
+                      "button",
+                      {
+                        class: "btn btn-sm btn-info",
+                        type: "button",
+                        onclick: () => mudarStatus(p.id, "entregue"),
+                      },
+                      "Marcar entregue"
+                    )
+                  : null
               )
             );
             return tr;
