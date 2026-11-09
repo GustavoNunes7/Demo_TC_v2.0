@@ -2504,3 +2504,27 @@ html[data-bs-theme="light"] #sistemaInicio .main-content hr {
     min-width: 680px;
   }
 }
+
+
+/* TechCampus — fluxo de pedidos e pagamentos */
+.tc-admin-payment { display:flex; flex-direction:column; gap:.2rem; min-width:170px; color:var(--tc-ink,#eef2f8); }
+.tc-admin-payment .small { color:var(--tc-muted,#aab5c5) !important; line-height:1.4; }
+.tc-admin-payment .badge { width:fit-content; font-weight:700; letter-spacing:.01em; }
+.tc-admin-payment .fw-semibold { color:var(--tc-ink,#eef2f8) !important; }
+html[data-bs-theme="light"] .tc-admin-payment,
+html[data-bs-theme="light"] .tc-admin-payment .fw-semibold { color:#1e293b !important; }
+html[data-bs-theme="light"] .tc-admin-payment .small { color:#526174 !important; }
+#modalPagamento .modal-content { border:1px solid var(--tc-line,#344256); border-radius:18px; box-shadow:0 20px 60px #0005; }
+#modalPagamento .modal-body { line-height:1.55; }
+#modalPagamento .bg-secondary-subtle { background:var(--bg-card,#202c3d) !important; color:var(--tc-ink,#f4f7fb) !important; border:1px solid var(--tc-line,#344256); }
+#modalPagamento .text-white-50 { color:var(--tc-muted,#aab5c5) !important; }
+html[data-bs-theme="light"] #modalPagamento .modal-content { background:#fff !important; color:#1e293b !important; border-color:#dbe2ec; }
+html[data-bs-theme="light"] #modalPagamento .modal-header,
+html[data-bs-theme="light"] #modalPagamento .modal-footer { border-color:#dbe2ec !important; }
+html[data-bs-theme="light"] #modalPagamento .text-white,
+html[data-bs-theme="light"] #modalPagamento .text-white-50 { color:#526174 !important; }
+html[data-bs-theme="light"] #modalPagamento .modal-title,
+html[data-bs-theme="light"] #modalPagamento h5,
+html[data-bs-theme="light"] #modalPagamento h6,
+html[data-bs-theme="light"] #modalPagamento strong { color:#1e293b !important; }
+html[data-bs-theme="light"] #modalPagamento .bg-secondary-subtle { background:#f6f8fb !important; color:#1e293b !important; border-color:#dbe2ec; }
