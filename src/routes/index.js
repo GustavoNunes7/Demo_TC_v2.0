@@ -412,7 +412,8 @@ r.get("/admin/pedidos", autenticar, admin, (req, res) => {
     SELECT p.id, p.usuario_id, p.status, p.observacao, p.criado_em,
       u.nome AS cliente, u.email AS cliente_email,
       COALESCE(SUM(i.quantidade * i.preco_unitario_centavos),0) AS total_centavos,
-      pg.status AS pagamento_status, pg.metodo AS pagamento_metodo
+      pg.id AS pagamento_id, pg.status AS pagamento_status, pg.metodo AS pagamento_metodo,
+      pg.tipo_cartao, pg.parcelas, pg.valor_entregue_centavos, pg.troco_centavos
     FROM pedidos p JOIN usuarios u ON u.id=p.usuario_id
     LEFT JOIN itens_pedido i ON i.pedido_id=p.id
     LEFT JOIN pagamentos pg ON pg.pedido_id=p.id
@@ -688,27 +689,7 @@ r.get("/pedidos/:id/token", autenticar, (req, res) => {
 
   res.json({ token: registro.token, expiraEm: registro.expira_em, status: "ativo" });
 });
-// Painel administrativo: devolve cada pedido com forma e detalhes do pagamento.
-r.get("/admin/pedidos", autenticar, admin, (req, res) => {
-  const filtro = clean(req.query.status, 30);
-  const permitidos = ["pendente", "aprovado", "rejeitado", "entregue", "cancelado"];
-  if (filtro && !permitidos.includes(filtro)) return bad(res, "Filtro de status inválido.");
-  const where = filtro ? "WHERE p.status=?" : "";
-  const pedidos = db.prepare(`
-    SELECT p.id, p.usuario_id, p.status, p.criado_em, u.nome AS cliente, u.email AS cliente_email,
-      COALESCE(SUM(i.quantidade * i.preco_unitario_centavos),0) AS total_centavos,
-      pg.id AS pagamento_id, pg.metodo AS pagamento_metodo, pg.status AS pagamento_status,
-      pg.tipo_cartao, pg.parcelas, pg.valor_entregue_centavos, pg.troco_centavos
-    FROM pedidos p
-    JOIN usuarios u ON u.id=p.usuario_id
-    LEFT JOIN itens_pedido i ON i.pedido_id=p.id
-    LEFT JOIN pagamentos pg ON pg.pedido_id=p.id
-    ${where}
-    GROUP BY p.id
-    ORDER BY p.id DESC
-  `).all(...(filtro ? [filtro] : []));
-  res.json(pedidos);
-});
+// A rota administrativa principal acima já inclui os detalhes completos do pagamento.
 
 // Pagamentos
 r.post("/pedidos/:id/pagamento", autenticar, (req, res) => {
