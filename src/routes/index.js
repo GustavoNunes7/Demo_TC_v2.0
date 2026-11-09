@@ -23,6 +23,133 @@ const get = (table, id) =>
   db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);
 const allowed = (value, values) => values.includes(value);
 
+const loginLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { erro: "Muitas tentativas. Tente novamente mais tarde." },
+});
+r.get("/saude", (_req, res) => res.json({ status: "online" }));
+r.get("/saude", (_req, res) => res.json({ status: "online" }));
+// Cadastro público somente como aluno; admin criado por processo administrativo local.
+r.post(
+  "/auth/cadastro",
+  loginLimit,
+  wrap(async (req, res) => {
+    const nome = clean(req.body.nome, 100),
+      email = clean(req.body.email, 254).toLowerCase(),
+      senha = req.body.senha;
+    if (
+      nome.length < 2 ||
+      !validEmail(email) ||
+      typeof senha !== "string" ||
+      senha.length < 5 ||
+      senha.length > 128
+    )
+      return bad(
+        res,
+        "Informe nome, e-mail válido e senha de 5 a 128 caracteres.",
+      );
+    if (db.prepare("SELECT id FROM usuarios WHERE email=?").get(email))
+      return res.status(409).json({ erro: "E-mail já cadastrado." });
+    const hash = await bcrypt.hash(senha, 12);
+    const info = db
+      .prepare("INSERT INTO usuarios(nome,email,senha_hash) VALUES(?,?,?)")
+      .run(nome, email, hash);
+    res
+      .status(201)
+      .json({ usuario: publicUser(get("usuarios", info.lastInsertRowid)) });
+  }),
+);
+r.post(
+  "/auth/login",
+  loginLimit,
+  wrap(async (req, res) => {
+    const email = clean(req.body.email, 254).toLowerCase(),
+      senha = req.body.senha;
+    if (!validEmail(email) || typeof senha !== "string") return bad(res);
+    const u = db.prepare("SELECT * FROM usuarios WHERE email=?").get(email);
+    if (!u || u.ativo === 0 || !(await bcrypt.compare(senha, u.senha_hash)))
+      return res.status(401).json({ erro: "Credenciais inválidas." });
+    const token = jwt.sign(
+      { id: u.id, papel: u.papel, versao: u.token_versao || 0 },
+      process.env.JWT_SECRET,
+      { expiresIn: "8h", algorithm: "HS256" },
+    );
+    res.json({ token, usuario: publicUser(u) });
+  }),
+);
+r.post("/auth/recuperar", loginLimit, wrap(async (req, res) => {
+  const email = clean(req.body.email, 254).toLowerCase();
+  if (!validEmail(email)) return bad(res, "Informe um e-mail válido.");
+  const apiKey = process.env.RESEND_API_KEY;
+  const remetente = process.env.EMAIL_FROM;
+  const appUrl = process.env.APP_URL;
+  if (!apiKey || !remetente || !appUrl) return res.status(503).json({ erro: "A recuperação por e-mail ainda não está configurada. Procure a administração da AAPM." });
+  const usuario = db.prepare("SELECT id,nome,email FROM usuarios WHERE email=? AND ativo=1").get(email);
+  if (usuario) {
+    const token = crypto.randomBytes(32).toString("hex");
+    const hash = crypto.createHash("sha256").update(token).digest("hex");
+    const baseUrl = new URL(appUrl);
+    if (!["http:", "https:"].includes(baseUrl.protocol)) return res.status(500).json({ erro: "Endereço do sistema inválido na configuração." });
+    const link = new URL("/frontend/login.html", baseUrl);
+    link.searchParams.set("token", token);
+    db.prepare("UPDATE recuperacoes SET usado=1 WHERE usuario_id=? AND usado=0").run(usuario.id);
+    db.prepare("INSERT INTO recuperacoes(usuario_id,token_hash,expira_em) VALUES(?,?,?)").run(usuario.id, hash, Date.now() + 15 * 60 * 1000);
+    const nomeSeguro = String(usuario.nome).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    const envio = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: remetente, to: [usuario.email], subject: "Recuperação de senha - TechCampus",
+        text: `Olá, ${usuario.nome}. Recebemos uma solicitação para redefinir sua senha do TechCampus. Acesse este link em até 15 minutos: ${link.href}. Se não foi você, ignore esta mensagem.`,
+        html: `<p>Olá, ${nomeSeguro}.</p><p>Recebemos uma solicitação para redefinir sua senha do TechCampus.</p><p><a href="${link.href}">Criar uma nova senha</a></p><p>Este link expira em 15 minutos. Se não foi você, ignore esta mensagem.</p>`
+      })
+    });
+    if (!envio.ok) {
+      db.prepare("UPDATE recuperacoes SET usado=1 WHERE token_hash=?").run(hash);
+      console.error("Falha ao enviar e-mail de recuperação. Verifique a configuração do provedor.");
+      return res.status(502).json({ erro: "Não foi possível enviar o e-mail de recuperação. Verifique a configuração do serviço." });
+    }
+  }
+  res.json({ mensagem: "Se o e-mail estiver cadastrado, você receberá um link de recuperação válido por 15 minutos." });
+}));
+r.post(
+  "/auth/redefinir",
+  loginLimit,
+  wrap(async (req, res) => {
+    const token = req.body.token,
+      senha = req.body.senha;
+    if (
+      typeof token !== "string" ||
+      !/^[a-f0-9]{64}$/.test(token) ||
+      typeof senha !== "string" ||
+      senha.length < 5 ||
+      senha.length > 128
+    )
+      return bad(res);
+    const hash = crypto.createHash("sha256").update(token).digest("hex");
+    const rec = db
+      .prepare(
+        "SELECT * FROM recuperacoes WHERE token_hash=? AND usado=0 AND expira_em>?",
+      )
+      .get(hash, Date.now());
+    if (!rec)
+      return res.status(400).json({ erro: "Token inválido ou expirado." });
+    const senhaHash = await bcrypt.hash(senha, 12);
+    db.transaction(() => {
+      db.prepare("UPDATE usuarios SET senha_hash=?, token_versao=token_versao+1 WHERE id=?").run(
+        senhaHash,
+        rec.usuario_id,
+      );
+      db.prepare("UPDATE recuperacoes SET usado=1 WHERE usuario_id=?").run(
+        rec.usuario_id,
+      );
+    })();
+    res.json({ mensagem: "Senha redefinida." });
+  }),
+);
 // Retorna o pedido com os campos usados pela tela do aluno e pelo painel administrativo.
 function detalharPedido(id) {
   const pedido = db.prepare(`
