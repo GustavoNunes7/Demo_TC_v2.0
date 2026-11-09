@@ -289,6 +289,11 @@
       campo("usuarioTipo").value = u?.papel || "aluno";
       campo("usuarioMatricula").value = u?.turma || "";
       campo("usuarioEmail").value = u?.email || "";
+      campo("usuarioTelefone").value = u?.telefone || "";
+      campo("usuarioNascimento").value = u?.data_nascimento || "";
+      campo("usuarioCpf").value = u?.cpf || "";
+      campo("usuarioGenero").value = u?.genero || "";
+      campo("usuarioObservacao").value = u?.observacao || "";
       campo("usuarioSenha").value = "";
       campo("usuarioSenha").required = !u;
       campo("usuarioStatus").value = u?.ativo === 0 ? "inativo" : "ativo";
@@ -308,6 +313,11 @@
         email: campo("usuarioEmail").value.trim(),
         papel: campo("usuarioTipo").value,
         turma: campo("usuarioMatricula").value.trim(),
+        telefone: campo("usuarioTelefone").value.trim(),
+        data_nascimento: campo("usuarioNascimento").value,
+        cpf: campo("usuarioCpf").value.trim(),
+        genero: campo("usuarioGenero").value,
+        observacao: campo("usuarioObservacao").value.trim(),
         ativo: campo("usuarioStatus").value === "ativo" ? 1 : 0
       };
       if (senha) body.senha = senha;
@@ -323,13 +333,36 @@
 
   async function iniciar() {
     if (!token()) return;
+    let perfilAtual = null;
     try {
-      const perfil = await api("/perfil");
-      for (const [id, value] of [["nome", perfil.nome], ["email", perfil.email], ["telefone", perfil.telefone || ""]]) {
-        const campo = document.getElementById(id); if (campo) campo.value = value || "";
+      perfilAtual = await api("/perfil");
+      for (const [id, value] of [
+        ["nome", perfilAtual.nome],
+        ["email", perfilAtual.email],
+        ["dataNascimento", perfilAtual.data_nascimento],
+        ["cpf", perfilAtual.cpf],
+        ["telefone", perfilAtual.telefone],
+        ["genero", perfilAtual.genero],
+        ["observacao", perfilAtual.observacao]
+      ]) {
+        const campo = document.getElementById(id);
+        if (campo) campo.value = value || "";
+      }
+      if (perfilAtual.papel === "aluno") {
+        for (const id of ["nome", "email", "dataNascimento", "cpf"]) {
+          const campo = document.getElementById(id);
+          if (campo) {
+            campo.readOnly = true;
+            campo.setAttribute("aria-readonly", "true");
+            campo.title = "Este dado não pode ser alterado pelo perfil de aluno.";
+            campo.style.pointerEvents = "none";
+          }
+        }
+        const aviso = document.getElementById("perfilDadosProtegidos");
+        if (aviso) aviso.classList.remove("d-none");
       }
       await carregarFoto();
-      if (perfil.papel === "admin") ligarGerenciamentoUsuarios();
+      if (perfilAtual.papel === "admin") ligarGerenciamentoUsuarios();
     } catch (e) { console.warn("Perfil não carregado:", e.message); }
 
     const form = document.getElementById("perfilForm");
@@ -339,12 +372,24 @@
         event.preventDefault();
         const btn = form.querySelector('[type="submit"]'); if (btn) btn.disabled = true;
         try {
-          await api("/perfil", { method: "PATCH", body: JSON.stringify({
-            nome: document.getElementById("nome")?.value || "",
-            email: document.getElementById("email")?.value || "",
-            telefone: document.getElementById("telefone")?.value || ""
-          }) });
+          const dadosPerfil = perfilAtual?.papel === "aluno"
+            ? {
+                telefone: document.getElementById("telefone")?.value || "",
+                genero: document.getElementById("genero")?.value || "",
+                observacao: document.getElementById("observacao")?.value || ""
+              }
+            : {
+                nome: document.getElementById("nome")?.value || "",
+                email: document.getElementById("email")?.value || "",
+                data_nascimento: document.getElementById("dataNascimento")?.value || "",
+                cpf: document.getElementById("cpf")?.value || "",
+                telefone: document.getElementById("telefone")?.value || "",
+                genero: document.getElementById("genero")?.value || "",
+                observacao: document.getElementById("observacao")?.value || ""
+              };
+          await api("/perfil", { method: "PATCH", body: JSON.stringify(dadosPerfil) });
           avisar("Perfil salvo na conta TechCampus.");
+          perfilAtual = await api("/perfil");
         } catch (e) { avisar(e.message, true); }
         finally { if (btn) btn.disabled = false; }
       });
