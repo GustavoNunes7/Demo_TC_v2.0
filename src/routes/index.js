@@ -412,7 +412,7 @@ r.get("/admin/pedidos", autenticar, admin, (req, res) => {
     SELECT p.id, p.usuario_id, p.status, p.observacao, p.criado_em,
       u.nome AS cliente, u.email AS cliente_email,
       COALESCE(SUM(i.quantidade * i.preco_unitario_centavos),0) AS total_centavos,
-      pg.status AS pagamento_status
+      pg.status AS pagamento_status, pg.metodo AS pagamento_metodo
     FROM pedidos p JOIN usuarios u ON u.id=p.usuario_id
     LEFT JOIN itens_pedido i ON i.pedido_id=p.id
     LEFT JOIN pagamentos pg ON pg.pedido_id=p.id
@@ -802,10 +802,19 @@ r.post("/pagamentos/:id/confirmar-simulado", autenticar, (req, res) => {
         "INSERT INTO tokens_retirada(pedido_id, token, expira_em) VALUES(?, ?, ?)",
       ).run(pedido.id, token, Date.now() + 15 * 60 * 1000);
     }
+    // PIX confirmado: aprovação automática, sem exigir ação manual no painel.
+    if (pagamento.metodo === "pix") {
+      db.prepare("UPDATE pedidos SET status='aprovado' WHERE id=? AND status='pendente'").run(pedido.id);
+    }
   })();
+  const pixAprovado = pagamento.metodo === "pix";
   db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)")
-    .run(pedido.usuario_id, "Pagamento confirmado", `O pagamento do pedido #${pedido.id} foi confirmado. Seu token de retirada está disponível por 15 minutos.`);
-  notificarAdmins("Pagamento de aluno confirmado", `Pagamento #${pagamento.id} do pedido #${pedido.id} (aluno #${pedido.usuario_id}) confirmado.`);
+    .run(pedido.usuario_id, pixAprovado ? "Pagamento e pedido confirmados" : "Pagamento confirmado",
+      pixAprovado
+        ? `O PIX do pedido #${pedido.id} foi confirmado e o pedido foi aprovado automaticamente. Seu token de retirada está disponível por 15 minutos.`
+        : `O pagamento do pedido #${pedido.id} foi confirmado. Seu token de retirada está disponível por 15 minutos.`);
+  notificarAdmins(pixAprovado ? "Pedido PIX aprovado automaticamente" : "Pagamento de aluno confirmado",
+    `Pagamento #${pagamento.id} do pedido #${pedido.id} (aluno #${pedido.usuario_id}) confirmado.`);
 
   res.json(get("pagamentos", pagamento.id));
 });
