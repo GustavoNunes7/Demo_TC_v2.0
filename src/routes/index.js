@@ -688,6 +688,28 @@ r.get("/pedidos/:id/token", autenticar, (req, res) => {
 
   res.json({ token: registro.token, expiraEm: registro.expira_em, status: "ativo" });
 });
+// Painel administrativo: devolve cada pedido com forma e detalhes do pagamento.
+r.get("/admin/pedidos", autenticar, admin, (req, res) => {
+  const filtro = clean(req.query.status, 30);
+  const permitidos = ["pendente", "aprovado", "rejeitado", "entregue", "cancelado"];
+  if (filtro && !permitidos.includes(filtro)) return bad(res, "Filtro de status inválido.");
+  const where = filtro ? "WHERE p.status=?" : "";
+  const pedidos = db.prepare(`
+    SELECT p.id, p.usuario_id, p.status, p.criado_em, u.nome AS cliente, u.email AS cliente_email,
+      COALESCE(SUM(i.quantidade * i.preco_unitario_centavos),0) AS total_centavos,
+      pg.id AS pagamento_id, pg.metodo AS pagamento_metodo, pg.status AS pagamento_status,
+      pg.tipo_cartao, pg.parcelas, pg.valor_entregue_centavos, pg.troco_centavos
+    FROM pedidos p
+    JOIN usuarios u ON u.id=p.usuario_id
+    LEFT JOIN itens_pedido i ON i.pedido_id=p.id
+    LEFT JOIN pagamentos pg ON pg.pedido_id=p.id
+    ${where}
+    GROUP BY p.id
+    ORDER BY p.id DESC
+  `).all(...(filtro ? [filtro] : []));
+  res.json(pedidos);
+});
+
 // Pagamentos
 r.post("/pedidos/:id/pagamento", autenticar, (req, res) => {
   const pedidoId = positiveId(req.params.id);
@@ -712,20 +734,37 @@ r.post("/pedidos/:id/pagamento", autenticar, (req, res) => {
 
   if (existente) return res.json(existente);
 
-  const total = db
-    .prepare(
-      "SELECT COALESCE(SUM(quantidade * preco_unitario_centavos), 0) AS total FROM itens_pedido WHERE pedido_id=?",
-    )
-    .get(pedidoId).total;
+  const total = db.prepare(
+    "SELECT COALESCE(SUM(quantidade * preco_unitario_centavos),0) AS total FROM itens_pedido WHERE pedido_id=?"
+  ).get(pedidoId).total;
 
-  const codigo =
-    metodo === "pix" ? crypto.randomBytes(16).toString("hex") : null;
+  let tipoCartao = null;
+  let parcelas = 1;
+  let valorEntregue = null;
+  let troco = null;
+  if (metodo === "dinheiro") {
+    valorEntregue = Number(req.body.valor_entregue_centavos);
+    if (!Number.isSafeInteger(valorEntregue) || valorEntregue < total)
+      return bad(res, "Informe um valor entregue igual ou superior ao total.");
+    troco = valorEntregue - total;
+  }
+  if (metodo === "cartao") {
+    tipoCartao = req.body.tipo_cartao;
+    if (!allowed(tipoCartao, ["debito", "credito"]))
+      return bad(res, "Selecione débito ou crédito.");
+    const maxParcelas = tipoCartao === "credito"
+      ? (total > 100000 ? 8 : total > 50000 ? 5 : total > 10000 ? 4 : total > 7500 ? 3 : 1)
+      : 1;
+    parcelas = Number(req.body.parcelas || 1);
+    if (!Number.isSafeInteger(parcelas) || parcelas < 1 || parcelas > maxParcelas)
+      return bad(res, "Quantidade de parcelas inválida para o valor do pedido.");
+  }
 
-  const info = db
-    .prepare(
-      "INSERT INTO pagamentos(pedido_id,metodo,valor_centavos,codigo) VALUES(?,?,?,?)",
-    )
-    .run(pedidoId, metodo, total, codigo);
+  const codigo = metodo === "pix" ? crypto.randomBytes(16).toString("hex") : null;
+  const info = db.prepare(`
+    INSERT INTO pagamentos(pedido_id,metodo,valor_centavos,codigo,tipo_cartao,parcelas,valor_entregue_centavos,troco_centavos)
+    VALUES(?,?,?,?,?,?,?,?)
+  `).run(pedidoId, metodo, total, codigo, tipoCartao, parcelas, valorEntregue, troco);
 
   notificarAdmins("Novo pagamento de aluno", `Foi iniciado um pagamento para o pedido #${pedido.id} (aluno #${pedido.usuario_id}).`);
   res.status(201).json(get("pagamentos", info.lastInsertRowid));
@@ -783,10 +822,12 @@ r.post("/pagamentos/:id/confirmar-simulado", autenticar, (req, res) => {
   if (pedido.usuario_id !== req.usuario.id && req.usuario.papel !== "admin")
     return res.sendStatus(403);
 
+  if (pagamento.metodo !== "pix")
+    return bad(res, "A simulação está disponível somente para pagamentos PIX.");
   if (pagamento.status !== "pendente")
     return bad(res, "Este pagamento já foi processado.");
 
-  // Confirma o pagamento e cria um único código de retirada por pedido.
+  // Confirma o PIX simulado e cria um único código de retirada por pedido.
   db.transaction(() => {
     db.prepare("UPDATE pagamentos SET status='confirmado' WHERE id=?").run(
       pagamento.id,
@@ -818,6 +859,34 @@ r.post("/pagamentos/:id/confirmar-simulado", autenticar, (req, res) => {
 
   res.json(get("pagamentos", pagamento.id));
 });
+r.post("/admin/pagamentos/:id/confirmar-presencial", autenticar, admin, (req, res) => {
+  const pagamento = get("pagamentos", positiveId(req.params.id));
+  if (!pagamento) return res.status(404).json({ erro: "Pagamento não encontrado." });
+  if (!["dinheiro", "cartao"].includes(pagamento.metodo))
+    return bad(res, "Somente dinheiro e cartão exigem confirmação presencial.");
+  if (pagamento.status !== "pendente")
+    return bad(res, "Este pagamento já foi processado.");
+  const pedido = get("pedidos", pagamento.pedido_id);
+  if (!pedido || pedido.status !== "pendente")
+    return bad(res, "Este pedido não está aguardando confirmação.");
+
+  db.transaction(() => {
+    db.prepare("UPDATE pagamentos SET status='confirmado' WHERE id=? AND status='pendente'").run(pagamento.id);
+    let token = db.prepare("SELECT id FROM tokens_retirada WHERE pedido_id=?").get(pedido.id);
+    if (!token) {
+      let codigo;
+      do { codigo = String(crypto.randomInt(100000, 1000000)); }
+      while (db.prepare("SELECT id FROM tokens_retirada WHERE token=?").get(codigo));
+      db.prepare("INSERT INTO tokens_retirada(pedido_id,token,expira_em) VALUES(?,?,?)")
+        .run(pedido.id, codigo, Date.now() + 15 * 60 * 1000);
+    }
+    db.prepare("UPDATE pedidos SET status='aprovado' WHERE id=? AND status='pendente'").run(pedido.id);
+  })();
+  db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)")
+    .run(pedido.usuario_id, "Pagamento presencial confirmado", `O pagamento do pedido #${pedido.id} foi confirmado. Seu token de retirada está disponível por 15 minutos.`);
+  res.json({ pagamento: get("pagamentos", pagamento.id), pedido: get("pedidos", pedido.id) });
+});
+
 r.patch("/pedidos/:id/status", autenticar, admin, (req, res) => {
   const p = get("pedidos", positiveId(req.params.id)),
     status = req.body.status;
