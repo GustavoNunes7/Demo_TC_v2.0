@@ -23,6 +23,67 @@ const get = (table, id) =>
   db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);
 const allowed = (value, values) => values.includes(value);
 
+// Retorna o pedido com os campos usados pela tela do aluno e pelo painel administrativo.
+function detalharPedido(id) {
+  const pedido = db.prepare(`
+    SELECT p.*, u.nome AS cliente, u.email AS cliente_email,
+      COALESCE(SUM(i.quantidade * i.preco_unitario_centavos), 0) AS total_centavos,
+      pg.id AS pagamento_id, pg.metodo AS pagamento_metodo,
+      pg.status AS pagamento_status, pg.tipo_cartao, pg.parcelas,
+      pg.valor_entregue_centavos, pg.troco_centavos,
+      pg.expira_em AS pagamento_expira_em
+    FROM pedidos p
+    JOIN usuarios u ON u.id = p.usuario_id
+    LEFT JOIN itens_pedido i ON i.pedido_id = p.id
+    LEFT JOIN pagamentos pg ON pg.pedido_id = p.id
+    WHERE p.id = ?
+    GROUP BY p.id
+  `).get(id);
+  if (!pedido) return null;
+  pedido.itens = db.prepare(`
+    SELECT i.produto_id, i.quantidade, i.preco_unitario_centavos,
+      pr.nome
+    FROM itens_pedido i
+    JOIN produtos pr ON pr.id = i.produto_id
+    WHERE i.pedido_id = ?
+    ORDER BY i.id
+  `).all(id);
+  return pedido;
+}
+
+// Esta rota alimenta a tabela administrativa. O LEFT JOIN mantém pedidos
+// visíveis mesmo se um registro de pagamento ainda não tiver sido criado.
+r.get("/admin/pedidos", autenticar, admin, (req, res) => {
+  const status = clean(req.query.status, 30);
+  const validStatus = ["pendente", "aprovado", "rejeitado", "entregue", "cancelado"];
+  if (status && !validStatus.includes(status)) return bad(res, "Filtro de status inválido.");
+  const where = status ? "WHERE p.status = ?" : "";
+  const rows = db.prepare(`
+    SELECT p.id, p.usuario_id, p.status, p.criado_em,
+      u.nome AS cliente, u.email AS cliente_email,
+      COALESCE(SUM(i.quantidade * i.preco_unitario_centavos), 0) AS total_centavos,
+      pg.id AS pagamento_id, pg.metodo AS pagamento_metodo,
+      pg.status AS pagamento_status, pg.tipo_cartao, pg.parcelas,
+      pg.valor_entregue_centavos, pg.troco_centavos,
+      pg.expira_em AS pagamento_expira_em
+    FROM pedidos p
+    JOIN usuarios u ON u.id = p.usuario_id
+    LEFT JOIN itens_pedido i ON i.pedido_id = p.id
+    LEFT JOIN pagamentos pg ON pg.pedido_id = p.id
+    ${where}
+    GROUP BY p.id
+    ORDER BY p.id DESC
+  `).all(...(status ? [status] : []));
+  res.json(rows);
+});
+
+r.get("/pedidos/:id", autenticar, (req, res) => {
+  const pedido = detalharPedido(positiveId(req.params.id));
+  if (!pedido) return res.status(404).json({ erro: "Pedido não encontrado." });
+  if (pedido.usuario_id !== req.usuario.id && req.usuario.papel !== "admin") return res.sendStatus(403);
+  res.json(pedido);
+});
+
 r.post("/pedidos/:id/pagamento", autenticar, (req, res) => {
   const pedidoId=positiveId(req.params.id), metodo=req.body.metodo;
   if(!allowed(metodo,["pix","cartao","dinheiro"]))return bad(res,"Forma de pagamento inválida.");
