@@ -57,9 +57,10 @@
       else if (v !== false && v != null) n.setAttribute(k, v === true ? "" : v);
     }
     kids
-      .flat()
+      .flat(Infinity)
+      .filter((c) => c !== false && c !== true && c != null)
       .forEach((c) =>
-        n.append(c instanceof Node ? c : document.createTextNode(c ?? ""))
+        n.append(c instanceof Node ? c : document.createTextNode(String(c)))
       );
     return n;
   };
@@ -1005,9 +1006,19 @@
       return;
     }
 
-    if (estadoPagamento.metodo === "cartao" && !estadoPagamento.tipoCartao) {
-      setMsg($("carrinhoMsg"), "Escolha Débito ou Crédito");
-      return;
+    if (estadoPagamento.metodo === "cartao") {
+      estadoPagamento.tipoCartao =
+        document.querySelector('input[name="caTypeCartao"]:checked')?.value ||
+        estadoPagamento.tipoCartao;
+      if (!estadoPagamento.tipoCartao) {
+        setMsg($("carrinhoMsg"), "Escolha Débito ou Crédito");
+        return;
+      }
+      if (estadoPagamento.tipoCartao === "credito") {
+        estadoPagamento.parcelas = Number($("caParcelas")?.value || estadoPagamento.parcelas || 1);
+      } else {
+        estadoPagamento.parcelas = 1;
+      }
     }
 
     if (
@@ -1240,6 +1251,9 @@
   function mostrarTelaCartao(container) {
     const pagamento = estadoCompra.pagamento;
     const tipo = estadoPagamento.tipoCartao === "credito" ? "Crédito" : "Débito";
+    const totalCentavos = Number(pagamento.valor_centavos || 0);
+    const parcelas = estadoPagamento.tipoCartao === "credito" ? Math.max(1, Number(estadoPagamento.parcelas || 1)) : 1;
+    const valorParcela = Math.round(totalCentavos / parcelas);
 
     const bloco = h(
       "div",
@@ -1247,7 +1261,7 @@
       h("h6", { class: "text-white-50 small mb-3" }, "Forma de pagamento"),
       h("p", { class: "mb-0" }, h("strong", {}, `Cartão de ${tipo}`)),
       ...(estadoPagamento.tipoCartao === "credito"
-        ? [h("p", { class: "mt-2 mb-0" }, h("strong", {}, `${estadoPagamento.parcelas}x no crédito`))]
+        ? [h("p", { class: "mt-2 mb-0" }, h("strong", {}, `${parcelas}x de ${brl(valorParcela)} no crédito`))]
         : []),
       h("p", { class: "small text-white-50 mt-3 mb-0" },
         "Apresente este pedido ao responsável da AAPM. O token será gerado após a confirmação presencial.")
@@ -2331,9 +2345,9 @@
               h("td", {}, dataBR(p.criado_em)),
               h("td", {}, brl(p.total_centavos)),
               h("td", {}, h("div", { class: "tc-admin-payment" },
-                h("strong", {}, p.pagamento_metodo === "pix" ? "PIX" : p.pagamento_metodo === "dinheiro" ? "Dinheiro" : p.pagamento_metodo === "cartao" ? `Cartão · ${p.tipo_cartao === "credito" ? "Crédito" : "Débito"}` : "Forma não informada"),
-                p.pagamento_metodo === "dinheiro" && h("small", {}, `Entregue: ${brl(p.valor_entregue_centavos)} · Troco: ${brl(p.troco_centavos)}`),
-                p.pagamento_metodo === "cartao" && p.tipo_cartao === "credito" && h("small", {}, `${p.parcelas || 1}x no crédito`),
+                h("strong", {}, p.pagamento_metodo === "pix" ? "PIX" : p.pagamento_metodo === "dinheiro" ? "Dinheiro" : p.pagamento_metodo === "cartao" ? `Cartão · ${p.tipo_cartao === "credito" ? "Crédito" : p.tipo_cartao === "debito" ? "Débito" : "Tipo não registrado"}` : "Forma não informada"),
+                p.pagamento_metodo === "dinheiro" && h("small", {}, `Entregue: ${p.valor_entregue_centavos == null ? "Não informado" : brl(p.valor_entregue_centavos)} · Troco: ${p.troco_centavos == null ? "—" : brl(p.troco_centavos)}`),
+                p.pagamento_metodo === "cartao" && p.tipo_cartao === "credito" && h("small", {}, (() => { const n = Math.max(1, Number(p.parcelas || 1)); return `${n}x de ${brl(Math.round(Number(p.total_centavos || 0) / n))}`; })()),
                 p.pagamento_status ? badge(PAG[p.pagamento_status], COR[p.pagamento_status]) : badge("Sem pagamento", "secondary")
               )),
               h("td", {}, badge(STATUS[p.status] || p.status, COR[p.status])),
