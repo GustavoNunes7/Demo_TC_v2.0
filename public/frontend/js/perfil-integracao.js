@@ -243,7 +243,7 @@
           assumir.id = "btnAssumirLideranca"; assumir.type = "button"; assumir.className = "btn btn-outline-warning me-2"; assumir.textContent = "Assumir liderança";
           botaoNovo.parentElement?.insertBefore(assumir, botaoNovo);
           assumir.addEventListener("click", async () => {
-            if (!confirm("Assumir a função única de Administrador Líder deste TechCampus?")) return;
+            if (!confirm("Assumir a liderança? Esta opção só aparece quando ainda não existe nenhum Líder.")) return;
             try { await api("/admin/assumir-lideranca", { method: "POST" }); location.reload(); }
             catch (e) { mostrarErro(e.message); }
           });
@@ -335,12 +335,12 @@
 
           if (ehLider && u.papel === "admin" && u.ativo !== 0) {
             menu.append(Object.assign(document.createElement("div"), { className: "dropdown-divider" }));
-            acaoMenu("Transferir liderança", "text-warning", async () => {
-              if (!confirm(`Transferir a liderança para ${u.nome}? Você deixará de ser o Administrador Líder.`)) return;
+            acaoMenu("Promover a Administrador Líder", "text-warning", async () => {
+              if (!confirm(`Promover ${u.nome} a Administrador Líder? Você continuará sendo Líder também.`)) return;
               try {
-                await api("/admin/transferir-lideranca", { method: "POST", body: JSON.stringify({ usuario_id: u.id }) });
-                alert("Liderança transferida. A página será atualizada.");
-                location.reload();
+                await api("/admin/promover-lider", { method: "POST", body: JSON.stringify({ usuario_id: u.id }) });
+                mostrarSucesso(`${u.nome} agora também é Administrador Líder.`);
+                await carregar();
               } catch (e) { mostrarErro(e.message); }
             });
             acaoMenu("Remover acesso administrativo", "text-danger", async () => {
