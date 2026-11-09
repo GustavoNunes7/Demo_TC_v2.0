@@ -2121,3 +2121,101 @@ html[data-bs-theme="light"] .tc-notification-menu .tc-notification-item strong {
 html[data-bs-theme="light"] .tc-notification-menu .tc-notification-item p { color:#344256 !important; }
 html[data-bs-theme="light"] .tc-notification-menu .tc-notification-item small { color:#64748b !important; }
 html[data-bs-theme="light"] .tc-notification-menu .tc-notification-read { color:#344256 !important; border-color:#cbd5e1 !important; }
+
+
+/* =========================================================
+   AJUSTES DE CONTRASTE — TEMA CLARO (NOV/2026)
+   Corrige estados hover, botões e tabelas herdados do tema escuro.
+   ========================================================= */
+html[data-bs-theme="light"] #sistemaInicio .main-content table tbody tr:hover,
+html[data-bs-theme="light"] #sistemaInicio .main-content .table tbody tr:hover {
+  --bs-table-bg: #f1f5f9 !important;
+  --bs-table-color: #202b3d !important;
+  background: #f1f5f9 !important;
+  color: #202b3d !important;
+}
+html[data-bs-theme="light"] #sistemaInicio .main-content table tbody tr:hover > *,
+html[data-bs-theme="light"] #sistemaInicio .main-content .table tbody tr:hover > * {
+  background: #f1f5f9 !important;
+  color: #202b3d !important;
+  box-shadow: none !important;
+}
+html[data-bs-theme="light"] #sistemaInicio .main-content table tbody tr > *,
+html[data-bs-theme="light"] #sistemaInicio .main-content .table tbody tr > * {
+  border-color: #e2e8f0 !important;
+}
+
+/* Botões preenchidos mantêm texto branco; botões claros/outline usam texto escuro. */
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn:is(
+  .btn-primary, .btn-danger, .btn-success, .btn-dark,
+  .btn-profile-save, .btn-gradient-red, .btn-custom
+),
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn:is(
+  .btn-primary, .btn-danger, .btn-success, .btn-dark,
+  .btn-profile-save, .btn-gradient-red, .btn-custom
+) :is(i, span, svg) {
+  color: #ffffff !important;
+}
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn-light,
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn-outline-light,
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn-outline-secondary {
+  color: #263449 !important;
+}
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn-light *,
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn-outline-light *,
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn-outline-secondary * {
+  color: inherit !important;
+}
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn-outline-danger {
+  color: #a91f2b !important;
+  border-color: #c43a45 !important;
+}
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn-outline-danger:hover {
+  color: #ffffff !important;
+  background: #a91f2b !important;
+}
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn:disabled,
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn.disabled {
+  color: #526176 !important;
+  opacity: .72 !important;
+}
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn:disabled *,
+html[data-bs-theme="light"] #sistemaInicio .main-content .btn.disabled * {
+  color: inherit !important;
+}
+
+/* Formatura: CTAs claros sobre imagem precisam de texto escuro legível. */
+html[data-bs-theme="light"] #formatura .btn-light,
+html[data-bs-theme="light"] #formatura .btn-outline-light {
+  color: #202b3d !important;
+  background: #ffffff !important;
+  border-color: #ffffff !important;
+}
+html[data-bs-theme="light"] #formatura .btn-light *,
+html[data-bs-theme="light"] #formatura .btn-outline-light * {
+  color: #202b3d !important;
+}
+
+/* Evita texto apagado em links/cartões durante hover e foco. */
+html[data-bs-theme="light"] #sistemaInicio .main-content a:not(.btn):hover,
+html[data-bs-theme="light"] #sistemaInicio .main-content button:not(.btn):hover {
+  text-decoration-color: currentColor;
+}
+html[data-bs-theme="light"] #sistemaInicio .main-content :is(
+  .card, .dropdown-menu, .list-group-item, .accordion-item
+) {
+  border-color: #e0e5ed !important;
+}
+html[data-bs-theme="light"] #sistemaInicio .main-content .dropdown-menu {
+  background: #ffffff !important;
+  color: #202b3d !important;
+  box-shadow: 0 12px 30px rgba(32, 43, 61, .14) !important;
+}
+html[data-bs-theme="light"] #sistemaInicio .main-content .dropdown-menu .dropdown-item {
+  color: #263449 !important;
+}
+html[data-bs-theme="light"] #sistemaInicio .main-content .dropdown-menu .dropdown-item:hover,
+html[data-bs-theme="light"] #sistemaInicio .main-content .dropdown-menu .dropdown-item:focus {
+  background: #f1f5f9 !important;
+  color: #a91f2b !important;
+}
