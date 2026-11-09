@@ -237,7 +237,7 @@
       const papel = campo("filtroTipoUsuario")?.value || "aluno";
       const status = campo("filtroStatusUsuario")?.value || "todos";
       const filtrados = usuarios.filter(u => {
-        const texto = `${u.nome || ""} ${u.email || ""} ${u.turma || ""}`.toLowerCase();
+        const texto = `${u.nome || ""} ${u.email || ""} ${u.matricula || ""} ${u.turma || ""}`.toLowerCase();
         return (!q || texto.includes(q)) && (papel === "todos" || u.papel === papel) &&
           (status === "todos" || (status === "ativo" ? u.ativo !== 0 : u.ativo === 0));
       });
@@ -266,7 +266,7 @@
             })
             .catch(() => {});
         }
-        for (const valor of [u.nome, u.turma || "—", u.email, u.papel === "admin" ? "Administrador" : "Aluno", u.ativo === 0 ? "Inativo" : "Ativo"]) {
+        for (const valor of [u.nome, u.matricula || "—", u.email, u.papel === "admin" ? "Administrador" : "Aluno", u.ativo === 0 ? "Inativo" : "Ativo"]) {
           const td = document.createElement("td"); td.textContent = valor || "—"; tr.append(td);
         }
         const acoes = document.createElement("td"); acoes.className = "text-end text-nowrap";
@@ -287,7 +287,7 @@
       campo("tituloModalUsuario").textContent = u ? "Editar cadastro" : "Novo cadastro";
       campo("usuarioNome").value = u?.nome || "";
       campo("usuarioTipo").value = u?.papel || "aluno";
-      campo("usuarioMatricula").value = u?.turma || "";
+      campo("usuarioMatricula").value = u?.matricula || "";
       campo("usuarioEmail").value = u?.email || "";
       campo("usuarioTelefone").value = u?.telefone || "";
       campo("usuarioCpf").value = u?.cpf || "";
@@ -316,7 +316,7 @@
         nome: campo("usuarioNome").value.trim(),
         email: campo("usuarioEmail").value.trim(),
         papel: campo("usuarioTipo").value,
-        turma: campo("usuarioMatricula").value.trim(),
+        matricula: campo("usuarioMatricula").value.trim(),
         telefone: campo("usuarioTelefone").value.trim(),
         cpf: campo("usuarioCpf").value.trim(),
         data_nascimento: campo("usuarioNascimento").value,
@@ -341,7 +341,7 @@
     try {
       perfilAtual = await api("/perfil");
       const valores = [
-        ["nome", perfilAtual.nome], ["email", perfilAtual.email], ["matricula", perfilAtual.turma],
+        ["nome", perfilAtual.nome], ["email", perfilAtual.email], ["matricula", perfilAtual.matricula],
         ["dataNascimento", perfilAtual.data_nascimento], ["cpf", perfilAtual.cpf],
         ["telefone", perfilAtual.telefone], ["genero", perfilAtual.genero],
         ["observacao", perfilAtual.observacao]
