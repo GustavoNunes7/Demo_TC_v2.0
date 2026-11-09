@@ -1517,49 +1517,91 @@
 
         <div id="gFinanceiro" class="tc-finance" hidden>
           <style>
-            #gFinanceiro{color:#172b3a!important}
-            #gFinanceiro .tc-fin-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:20px}
-            #gFinanceiro .tc-fin-sub{color:#718096;font-size:.88rem}
-            #gFinanceiro .tc-card{background:#fff;border:1px solid #e7edf2;border-radius:16px;padding:18px;height:100%;box-shadow:0 5px 18px rgba(20,42,60,.045)}
-            #gFinanceiro .tc-kpi{position:relative;overflow:hidden;min-height:118px}
-            #gFinanceiro .tc-kpi:after{content:"";position:absolute;width:74px;height:74px;border-radius:50%;right:-20px;top:-22px;background:var(--tc-tint)}
-            #gFinanceiro .tc-kpi-label{color:#718096;font-size:.82rem;font-weight:600}
-            #gFinanceiro .tc-kpi-value{font-size:clamp(1.35rem,2.5vw,1.9rem);font-weight:750;letter-spacing:-.04em;margin-top:9px}
-            #gFinanceiro .tc-kpi-note{font-size:.75rem;color:#8795a3;margin-top:4px}
-            #gFinanceiro .tc-section-title{font-size:1rem;font-weight:750;margin:0 0 4px;color:#203447}
-            #gFinanceiro .tc-panel-note{font-size:.78rem;color:#8492a0}
-            #gFinanceiro .tc-fin-field{background:#f8fafc!important;color:#203447!important;border:1px solid #dfe7ee!important;border-radius:9px!important}
-            #gFinanceiro .tc-fin-field:focus{border-color:#12bfa5!important;box-shadow:0 0 0 .2rem rgba(18,191,165,.12)!important}
-            #gFinanceiro .tc-fin-btn{background:#08b99e;border:0;color:#fff;font-weight:650;border-radius:9px}
-            #gFinanceiro .tc-fin-btn:hover{background:#079d87;color:#fff}
-            #gFinanceiro .tc-bar-chart{display:flex;align-items:flex-end;gap:clamp(7px,1.5vw,16px);height:205px;padding:14px 4px 0;overflow-x:auto}
+            /* TechCampus Financeiro — tema escuro como padrão */
+            #gFinanceiro{
+              --fin-bg:#111a23;--fin-card:#18232e;--fin-card-soft:#202d39;
+              --fin-border:#2a3947;--fin-text:#edf4f7;--fin-muted:#9aabb8;
+              --fin-input:#121d27;--fin-grid:#2a3947;--fin-shadow:0 12px 28px rgba(0,0,0,.16);
+              --fin-green:#19c6a3;--fin-red:#ff718c;--fin-blue:#68a9ff;
+              color:var(--fin-text)!important;min-width:0
+            }
+            #gFinanceiro .tc-fin-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+            #gFinanceiro .tc-fin-head h3{font-size:1.45rem;letter-spacing:-.035em;color:var(--fin-text)!important}
+            #gFinanceiro .tc-fin-sub,#gFinanceiro .tc-panel-note{color:var(--fin-muted)!important;font-size:.8rem}
+            #gFinanceiro .tc-card{background:var(--fin-card)!important;color:var(--fin-text)!important;border:1px solid var(--fin-border)!important;border-radius:15px;padding:19px;height:100%;box-shadow:var(--fin-shadow);min-width:0}
+            #gFinanceiro .tc-kpi{position:relative;overflow:hidden;min-height:126px;padding:19px 20px}
+            #gFinanceiro .tc-kpi:after{content:"";position:absolute;width:82px;height:82px;border-radius:50%;right:-24px;top:-28px;background:var(--tc-tint);opacity:.13;pointer-events:none}
+            #gFinanceiro .tc-kpi-label{color:var(--fin-muted)!important;font-size:.8rem;font-weight:650;position:relative;z-index:1}
+            #gFinanceiro .tc-kpi-value{font-size:clamp(1.35rem,2.4vw,1.85rem);font-weight:780;letter-spacing:-.045em;margin-top:12px;position:relative;z-index:1;color:var(--fin-text)}
+            #gFinanceiro .tc-kpi-note{font-size:.73rem;color:var(--fin-muted)!important;margin-top:5px;position:relative;z-index:1}
+            #gFinanceiro .tc-section-title{font-size:.98rem;font-weight:750;margin:0 0 4px;color:var(--fin-text)!important;letter-spacing:-.015em}
+            #gFinanceiro .tc-fin-field{background:var(--fin-input)!important;color:var(--fin-text)!important;border:1px solid var(--fin-border)!important;border-radius:9px!important;min-height:39px}
+            #gFinanceiro .tc-fin-field::placeholder{color:var(--fin-muted)!important}
+            #gFinanceiro .tc-fin-field:focus{border-color:var(--fin-green)!important;box-shadow:0 0 0 .2rem rgba(25,198,163,.14)!important}
+            #gFinanceiro select option{background:var(--fin-card);color:var(--fin-text)}
+            #gFinanceiro .tc-fin-btn{background:#078d78;border:1px solid #078d78;color:#fff;font-weight:700;border-radius:9px;min-height:39px}
+            #gFinanceiro .tc-fin-btn:hover{background:#087763;border-color:#087763;color:#fff}
+            #gFinanceiro .tc-fin-btn:focus-visible{outline:3px solid rgba(25,198,163,.3);outline-offset:2px}
+            #gFinanceiro .tc-bar-chart{display:flex;align-items:flex-end;gap:clamp(8px,1.5vw,16px);height:214px;padding:15px 4px 0;overflow-x:auto;border-bottom:1px solid var(--fin-grid);background:repeating-linear-gradient(to bottom,transparent 0,transparent 39px,var(--fin-grid) 40px)}
             #gFinanceiro .tc-bar-month{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1 0 34px;height:100%;min-width:34px}
-            #gFinanceiro .tc-bars{height:166px;display:flex;align-items:flex-end;gap:4px}
-            #gFinanceiro .tc-bar{width:12px;min-height:2px;border-radius:5px 5px 2px 2px}
-            #gFinanceiro .tc-legend-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
-            #gFinanceiro .tc-pie-wrap{display:flex;align-items:center;justify-content:center;gap:22px;flex-wrap:wrap;padding:10px 0}
-            #gFinanceiro .tc-pie{width:190px;height:190px;border-radius:50%;position:relative;flex:0 0 190px}
-            #gFinanceiro .tc-pie:after{content:"";position:absolute;inset:29%;background:#fff;border-radius:50%;box-shadow:0 0 0 1px #f0f3f5}
+            #gFinanceiro .tc-bars{height:174px;display:flex;align-items:flex-end;gap:4px}
+            #gFinanceiro .tc-bar{width:clamp(9px,1.1vw,13px);min-height:2px;border-radius:5px 5px 2px 2px;transition:filter .18s,transform .18s}
+            #gFinanceiro .tc-bar:hover{filter:brightness(1.18);transform:translateY(-2px)}
+            #gFinanceiro .tc-legend-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+            #gFinanceiro .tc-pie-wrap{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;padding:12px 0;min-height:210px}
+            #gFinanceiro .tc-pie{width:174px;height:174px;border-radius:50%;position:relative;flex:0 0 174px;box-shadow:0 0 0 1px var(--fin-border)}
+            #gFinanceiro .tc-pie:after{content:"";position:absolute;inset:29%;background:var(--fin-card)!important;border-radius:50%;box-shadow:0 0 0 1px var(--fin-border)}
             #gFinanceiro .tc-pie-center{position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;pointer-events:none}
-            #gFinanceiro .tc-pie-center strong{font-size:1.25rem;color:#203447}
-            #gFinanceiro .tc-pie-center span{font-size:.7rem;color:#8492a0}
-            #gFinanceiro .tc-pie-legend{display:grid;gap:9px;min-width:150px;flex:1}
-            #gFinanceiro .tc-pie-item{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.82rem}
+            #gFinanceiro .tc-pie-center strong{font-size:1.2rem;color:var(--fin-text)!important}
+            #gFinanceiro .tc-pie-center span{font-size:.68rem;color:var(--fin-muted)!important}
+            #gFinanceiro .tc-pie-legend{display:grid;gap:10px;min-width:145px;flex:1}
+            #gFinanceiro .tc-pie-item{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.79rem;color:var(--fin-text)}
             #gFinanceiro .tc-pie-item-name{display:flex;align-items:center;gap:7px;min-width:0}
             #gFinanceiro .tc-pie-swatch{width:9px;height:9px;border-radius:3px;flex:0 0 9px}
-            #gFinanceiro .tc-stock-stat{background:#f7fafc;border-radius:11px;padding:12px}
-            #gFinanceiro .tc-stock-stat strong{display:block;font-size:1.25rem;color:#203447}
-            #gFinanceiro .tc-stock-stat span{font-size:.76rem;color:#718096}
-            #gFinanceiro .tc-fin-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #edf1f4}
+            #gFinanceiro .tc-stock-stat{background:var(--fin-card-soft)!important;border:1px solid var(--fin-border);border-radius:11px;padding:13px}
+            #gFinanceiro .tc-stock-stat strong{display:block;font-size:1.25rem;color:var(--fin-text)!important}
+            #gFinanceiro .tc-stock-stat span{font-size:.74rem;color:var(--fin-muted)!important}
+            #gFinanceiro .tc-fin-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--fin-grid)}
             #gFinanceiro .tc-fin-list-row:last-child{border-bottom:0}
-            #gFinanceiro .tc-rank{width:28px;height:28px;border-radius:9px;background:#eafaf6;color:#079d87;display:grid;place-items:center;font-weight:750;font-size:.8rem;flex:0 0 28px}
-            #gFinanceiro .tc-progress{height:6px;background:#edf2f5;border-radius:99px;overflow:hidden;margin-top:7px}
-            #gFinanceiro .tc-progress>span{display:block;height:100%;border-radius:99px;background:#0fc5a6}
+            #gFinanceiro .tc-rank{width:28px;height:28px;border-radius:9px;background:rgba(25,198,163,.13);color:var(--fin-green);display:grid;place-items:center;font-weight:750;font-size:.8rem;flex:0 0 28px}
+            #gFinanceiro .tc-progress{height:6px;background:var(--fin-card-soft);border-radius:99px;overflow:hidden;margin-top:7px}
+            #gFinanceiro .tc-progress>span{display:block;height:100%;border-radius:99px;background:var(--fin-green)}
             #gFinanceiro .tc-fin-table{width:100%;font-size:.84rem}
-            #gFinanceiro .tc-fin-table td{padding:10px 6px;border-bottom:1px solid #edf1f4}
+            #gFinanceiro .tc-fin-table td{padding:10px 6px;border-bottom:1px solid var(--fin-grid)}
             #gFinanceiro .tc-fin-table tr:last-child td{border-bottom:0}
-            @media(max-width:575px){#gFinanceiro .tc-card{padding:14px;border-radius:13px}#gFinanceiro .tc-pie{width:160px;height:160px;flex-basis:160px}}
-          </style>
+            #gFinanceiro #gFinHistorico>div{color:var(--fin-text)!important;border-color:var(--fin-grid)!important;padding:12px 2px!important}
+            #gFinanceiro #gFinHistorico strong{color:var(--fin-red)}
+            #gFinanceiro #gFinEstoqueLista .tc-fin-list-row span{color:var(--fin-text)!important}
+            #gFinanceiro .text-secondary{color:var(--fin-muted)!important}
+            #gFinanceiro .border-top,#gFinanceiro .border-bottom{border-color:var(--fin-grid)!important}
+            #gFinanceiro .text-success{color:var(--fin-green)!important}
+            #gFinanceiro .text-danger{color:var(--fin-red)!important}
+            @media(max-width:767px){
+              #gFinanceiro .tc-card{padding:15px;border-radius:13px}
+              #gFinanceiro .tc-kpi{min-height:112px}
+              #gFinanceiro .tc-fin-head h3{font-size:1.25rem}
+              #gFinanceiro .tc-pie{width:154px;height:154px;flex-basis:154px}
+              #gFinanceiro .tc-pie-wrap{gap:14px}
+            }
+            @media(max-width:420px){
+              #gFinanceiro .tc-pie-wrap{flex-direction:column}
+              #gFinanceiro .tc-pie-legend{width:100%}
+            }
+
+            /* Tema claro — mesma hierarquia, superfícies claras e contraste reforçado */
+            html[data-bs-theme="light"] #gFinanceiro{
+              --fin-bg:#f4f6fa;--fin-card:#fff;--fin-card-soft:#f3f6fa;
+              --fin-border:#e1e7ef;--fin-text:#243247;--fin-muted:#718096;
+              --fin-input:#fff;--fin-grid:#e8edf3;--fin-shadow:0 5px 18px rgba(31,48,70,.055);
+              --fin-green:#078d72;--fin-red:#d94d69;--fin-blue:#397bd5;
+              color:var(--fin-text)!important
+            }
+            html[data-bs-theme="light"] #gFinanceiro .tc-pie:after{background:#fff!important}
+            html[data-bs-theme="light"] #gFinanceiro .tc-kpi-note{color:#718096!important}
+            html[data-bs-theme="light"] #gFinanceiro .tc-fin-btn{background:#078d72;border-color:#078d72}
+            html[data-bs-theme="light"] #gFinanceiro .tc-rank{background:#e6f7f2;color:#078d72}
+            html[data-bs-theme="light"] #gFinanceiro .tc-progress{background:#edf2f6}
+          </style>  </style>
           <div class="tc-fin-head">
             <div><h3 class="fw-bold mb-1">Visão financeira</h3><div class="tc-fin-sub">Acompanhe receitas, despesas, vendas e movimentações do estoque.</div></div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
