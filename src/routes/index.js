@@ -57,6 +57,7 @@ db.exec(`
 const colunasUsuario = db.prepare("PRAGMA table_info(usuarios)").all().map((c) => c.name);
 if (!colunasUsuario.includes("ativo")) db.exec("ALTER TABLE usuarios ADD COLUMN ativo INTEGER NOT NULL DEFAULT 1");
 if (!colunasUsuario.includes("foto_url")) db.exec("ALTER TABLE usuarios ADD COLUMN foto_url TEXT");
+if (!colunasUsuario.includes("matricula")) db.exec("ALTER TABLE usuarios ADD COLUMN matricula TEXT");
 if (!colunasUsuario.includes("cpf")) db.exec("ALTER TABLE usuarios ADD COLUMN cpf TEXT");
 if (!colunasUsuario.includes("data_nascimento")) db.exec("ALTER TABLE usuarios ADD COLUMN data_nascimento TEXT");
 if (!colunasUsuario.includes("genero")) db.exec("ALTER TABLE usuarios ADD COLUMN genero TEXT");
@@ -234,7 +235,7 @@ r.get("/usuarios", autenticar, admin, (_req, res) =>
   res.json(
     db
       .prepare(
-        "SELECT id,nome,email,papel,turma,telefone,cpf,data_nascimento,genero,observacao,ativo,foto_url,criado_em FROM usuarios ORDER BY id DESC",
+        "SELECT id,nome,email,papel,turma,matricula,telefone,cpf,data_nascimento,genero,observacao,ativo,foto_url,criado_em FROM usuarios ORDER BY id DESC",
       )
       .all(),
   ),
@@ -263,8 +264,9 @@ r.post("/usuarios", autenticar, admin, wrap(async (req, res) => {
   if (cpf && !/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(cpf) && !/^\d{11}$/.test(cpf)) return bad(res, "CPF inválido.");
   if (dataNascimento && (!/^\d{4}-\d{2}-\d{2}$/.test(dataNascimento) || !Number.isFinite(Date.parse(dataNascimento + "T12:00:00")))) return bad(res, "Data de nascimento inválida.");
   if (!allowed(genero, ["", "masculino", "feminino", "nao_informar", "outro"])) return bad(res, "Gênero inválido.");
-  const info = db.prepare("INSERT INTO usuarios(nome,email,senha_hash,papel,turma,telefone,cpf,data_nascimento,genero,observacao) VALUES(?,?,?,?,?,?,?,?,?,?)")
-    .run(nome,email,hash,papel,clean(req.body.turma,60),clean(req.body.telefone,25),cpf || null,dataNascimento || null,genero || null,observacao || null);
+  const matricula = clean(req.body.matricula, 60);
+  const info = db.prepare("INSERT INTO usuarios(nome,email,senha_hash,papel,turma,matricula,telefone,cpf,data_nascimento,genero,observacao) VALUES(?,?,?,?,?,?,?,?,?,?,?)")
+    .run(nome,email,hash,papel,clean(req.body.turma,60),matricula,clean(req.body.telefone,25),cpf || null,dataNascimento || null,genero || null,observacao || null);
   res.status(201).json(publicUser(get("usuarios", info.lastInsertRowid)));
 }));
 r.patch("/usuarios/:id", autenticar, admin, wrap(async (req, res) => {
@@ -274,6 +276,7 @@ r.patch("/usuarios/:id", autenticar, admin, wrap(async (req, res) => {
   const email = req.body.email === undefined ? u.email : clean(req.body.email, 254).toLowerCase();
   const turma = req.body.turma === undefined ? u.turma : clean(req.body.turma, 60);
   const telefone = req.body.telefone === undefined ? u.telefone : clean(req.body.telefone, 25);
+  const matricula = req.body.matricula === undefined ? (u.matricula || "") : clean(req.body.matricula, 60);
   const cpf = req.body.cpf === undefined ? (u.cpf || "") : clean(req.body.cpf, 14);
   const dataNascimento = req.body.data_nascimento === undefined ? (u.data_nascimento || "") : clean(req.body.data_nascimento, 10);
   const genero = req.body.genero === undefined ? (u.genero || "") : req.body.genero;
@@ -286,13 +289,13 @@ r.patch("/usuarios/:id", autenticar, admin, wrap(async (req, res) => {
   if (!allowed(genero, ["", "masculino", "feminino", "nao_informar", "outro"])) return bad(res, "Gênero inválido.");
   if (db.prepare("SELECT id FROM usuarios WHERE email=? AND id<>?").get(email, id)) return res.status(409).json({ erro: "E-mail já cadastrado." });
   if (u.id === req.usuario.id && (papel !== "admin" || !ativo)) return bad(res, "Você não pode desativar ou rebaixar sua própria conta administrativa.");
-  let sql = "UPDATE usuarios SET nome=?,email=?,turma=?,telefone=?,cpf=?,data_nascimento=?,genero=?,observacao=?,papel=?,ativo=? WHERE id=?";
-  const args = [nome,email,turma,telefone,cpf || null,dataNascimento || null,genero || null,observacao || null,papel,ativo,id];
+  let sql = "UPDATE usuarios SET nome=?,email=?,turma=?,matricula=?,telefone=?,cpf=?,data_nascimento=?,genero=?,observacao=?,papel=?,ativo=? WHERE id=?";
+  const args = [nome,email,turma,matricula,telefone,cpf || null,dataNascimento || null,genero || null,observacao || null,papel,ativo,id];
   if (req.body.senha) {
     if (typeof req.body.senha !== "string" || req.body.senha.length < 5 || req.body.senha.length > 128) return bad(res, "A senha deve ter de 5 a 128 caracteres.");
     const hash = await bcrypt.hash(req.body.senha, 12);
-    sql = "UPDATE usuarios SET nome=?,email=?,turma=?,telefone=?,cpf=?,data_nascimento=?,genero=?,observacao=?,papel=?,ativo=?,senha_hash=? WHERE id=?";
-    args.splice(10, 0, hash);
+    sql = "UPDATE usuarios SET nome=?,email=?,turma=?,matricula=?,telefone=?,cpf=?,data_nascimento=?,genero=?,observacao=?,papel=?,ativo=?,senha_hash=? WHERE id=?";
+    args.splice(11, 0, hash);
   }
   db.prepare(sql).run(...args);
   const atualizado = get("usuarios", id);
