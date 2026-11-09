@@ -10,6 +10,8 @@ const rateLimit = require("express-rate-limit"),
 const { db, publicUser, validEmail, clean, positiveId } = require("../models");
 const autenticar = require("../middlewares/auth"),
   { admin, lider } = require("../middlewares/auth");
+const EMAIL_LIDER_PRINCIPAL = "admin@techcampus.com";
+const ehLiderPrincipal = (usuario) => String(usuario?.email || "").toLowerCase() === EMAIL_LIDER_PRINCIPAL;
 const r = express.Router(),
   wrap = (fn) => (req, res, next) =>
     Promise.resolve()
@@ -301,7 +303,7 @@ r.post("/usuarios", autenticar, admin, wrap(async (req, res) => {
 r.patch("/usuarios/:id", autenticar, admin, wrap(async (req, res) => {
   const id = positiveId(req.params.id), u = get("usuarios", id);
   if (!u) return res.sendStatus(404);
-  if (u.admin_lider === 1) return res.status(403).json({ erro: "O cadastro do Administrador Líder não pode ser alterado pela gestão de usuários." });
+  if (ehLiderPrincipal(u)) return res.status(403).json({ erro: "A conta do Líder Principal é protegida." });
   if (u.papel === "admin" && u.id !== req.usuario.id && req.usuario.admin_lider === true) {
     const campos = Object.keys(req.body || {});
     if (campos.length !== 1 || campos[0] !== "ativo")
@@ -352,14 +354,23 @@ r.post("/admin/assumir-lideranca", autenticar, admin, (req, res) => {
   res.json(publicUser(get("usuarios", req.usuario.id)));
 });
 
+// Sub-líderes compartilham as permissões administrativas elevadas.
 r.post("/admin/promover-lider", autenticar, admin, lider, (req, res) => {
-  const novoLiderId = positiveId(req.body.usuario_id);
-  const novoLider = get("usuarios", novoLiderId);
-  if (!novoLider || novoLider.papel !== "admin" || novoLider.ativo !== 1) return bad(res, "Selecione um administrador ativo.");
-  if (novoLider.admin_lider === 1) return res.status(409).json({ erro: "Este administrador já é Líder." });
-  const atualizado = db.prepare("UPDATE usuarios SET admin_lider=1 WHERE id=? AND papel='admin' AND ativo=1 AND admin_lider=0").run(novoLider.id);
+  const alvo = get("usuarios", positiveId(req.body.usuario_id));
+  if (!alvo || alvo.papel !== "admin" || alvo.ativo !== 1) return bad(res, "Selecione um administrador ativo.");
+  if (ehLiderPrincipal(alvo)) return res.status(409).json({ erro: "Esta conta é o Líder Principal." });
+  if (alvo.admin_lider === 1) return res.status(409).json({ erro: "Este administrador já é Sub-líder." });
+  const atualizado = db.prepare("UPDATE usuarios SET admin_lider=1 WHERE id=? AND papel='admin' AND ativo=1 AND admin_lider=0").run(alvo.id);
   if (atualizado.changes !== 1) return res.status(409).json({ erro: "Não foi possível promover este administrador." });
-  res.json({ ok: true, mensagem: "Administrador promovido a Líder. Sua própria liderança foi mantida." });
+  res.json({ ok: true, mensagem: "Administrador promovido a Sub-líder." });
+});
+r.post("/admin/remover-sublider", autenticar, admin, lider, (req, res) => {
+  const alvo = get("usuarios", positiveId(req.body.usuario_id));
+  if (!alvo || alvo.papel !== "admin") return res.status(404).json({ erro: "Administrador não encontrado." });
+  if (ehLiderPrincipal(alvo)) return res.status(403).json({ erro: "A liderança principal não pode ser removida." });
+  if (alvo.admin_lider !== 1) return res.status(409).json({ erro: "Este administrador não é Sub-líder." });
+  db.prepare("UPDATE usuarios SET admin_lider=0 WHERE id=? AND papel='admin'").run(alvo.id);
+  res.json({ ok: true, mensagem: "Sub-liderança removida. A conta continua como administradora." });
 });
 
 // Exclusão lógica de alunos e remoção de acesso administrativo: preserva o histórico relacionado.
@@ -367,8 +378,8 @@ r.delete("/usuarios/:id", autenticar, admin, lider, (req, res) => {
   const id = positiveId(req.params.id);
   const usuario = get("usuarios", id);
   if (!usuario || usuario.ativo === 0) return res.sendStatus(404);
-  if (usuario.admin_lider === 1 || usuario.id === req.usuario.id)
-    return res.status(403).json({ erro: "O Administrador Líder não pode remover a própria conta nem a liderança atual." });
+  if (ehLiderPrincipal(usuario) || usuario.id === req.usuario.id)
+    return res.status(403).json({ erro: "A conta do Líder Principal e a própria conta não podem ser removidas por esta ação." });
 
   if (usuario.papel === "aluno") {
     db.transaction(() => {
