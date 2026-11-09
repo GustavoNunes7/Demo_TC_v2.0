@@ -251,6 +251,10 @@ r.delete("/perfil", autenticar, wrap(async (req, res) => {
     db.prepare("UPDATE usuarios SET ativo=0,token_versao=token_versao+1,email=?,nome=?,telefone=NULL,foto_url=NULL,cpf=NULL,data_nascimento=NULL,genero=NULL,observacao=NULL,matricula=NULL,turma=NULL WHERE id=?")
       .run(`encerrada+${u.id}+${Date.now()}@conta.invalid`, `Conta encerrada #${u.id}`, u.id);
   })();
+  if (u.foto_url && /^[a-f0-9-]+\\.(jpg|jpeg|png)$/i.test(u.foto_url)) {
+    const foto = path.join(uploadDir, u.foto_url);
+    if (fs.existsSync(foto)) fs.unlinkSync(foto);
+  }
   notificarAdmins("Encerramento de conta", `A conta de usuário #${u.id} solicitou encerramento. O histórico de pedidos e pagamentos foi preservado.`);
   res.json({ ok: true, mensagem: "Conta encerrada. Sua sessão será finalizada." });
 }));
