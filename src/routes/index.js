@@ -90,11 +90,10 @@ r.post("/pedidos/:id/cancelar", autenticar, (req, res) => {
 });
 
 r.post("/pagamentos/:id/confirmar-simulado", autenticar, (req, res) => {
-  // Esta rota é apenas para testes locais; não confirma pagamentos reais.
-  if (process.env.PAGAMENTO_SIMULADO !== "true") {
-    return res.status(404).json({
-      erro: "O pagamento simulado está desativado.",
-    });
+  // Demonstração local: esta rota simula exclusivamente a confirmação de PIX.
+  // Em produção, a confirmação deve vir de um provedor de pagamento (webhook).
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({ erro: "A simulação de pagamento está disponível apenas no ambiente de demonstração." });
   }
 
   const pagamento = get("pagamentos", positiveId(req.params.id));
@@ -108,10 +107,14 @@ r.post("/pagamentos/:id/confirmar-simulado", autenticar, (req, res) => {
   if (pedido.usuario_id !== req.usuario.id && req.usuario.papel !== "admin")
     return res.sendStatus(403);
 
+  if (pagamento.metodo !== "pix")
+    return bad(res, "A simulação está disponível somente para pagamentos PIX.");
   if (pagamento.status !== "pendente")
     return bad(res, "Este pagamento já foi processado.");
+  if (pedido.status !== "pendente")
+    return bad(res, "Este pedido não está aguardando pagamento.");
 
-  // Confirma o pagamento e cria um único código de retirada por pedido.
+  // Confirma o PIX simulado e cria um único código de retirada por pedido.
   db.transaction(() => {
     db.prepare("UPDATE pagamentos SET status='confirmado' WHERE id=?").run(
       pagamento.id,
