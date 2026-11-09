@@ -320,7 +320,11 @@
             menu.append(item);
           };
 
-          acaoMenu("Editar cadastro", "", () => abrir(u));
+          // Administradores mantêm seus próprios dados em Meu Perfil.
+          // A liderança não recebe ação de edição sobre contas administrativas.
+          if (u.papel !== "admin") {
+            acaoMenu("Editar cadastro", "", () => abrir(u));
+          }
           acaoMenu(u.ativo === 0 ? "Ativar conta" : "Desativar conta", u.ativo === 0 ? "text-success" : "text-warning", async () => {
             if (!confirm(`${u.ativo === 0 ? "Ativar" : "Desativar"} a conta de ${u.nome}?`)) return;
             try {
