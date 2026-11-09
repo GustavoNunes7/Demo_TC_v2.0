@@ -375,7 +375,7 @@ r.delete("/usuarios/:id", autenticar, admin, lider, (req, res) => {
       db.prepare("UPDATE usuarios SET ativo=0,token_versao=token_versao+1,email=?,nome=?,telefone=NULL,foto_url=NULL,cpf=NULL,data_nascimento=NULL,genero=NULL,observacao=NULL,matricula=NULL,turma=NULL WHERE id=?")
         .run(`removida+${id}+${Date.now()}@conta.invalid`, `Conta removida #${id}`, id);
     })();
-    if (usuario.foto_url && /^[a-f0-9-]+\\.(jpg|jpeg|png)$/i.test(usuario.foto_url)) {
+    if (usuario.foto_url && /^[a-f0-9-]+\.(jpg|jpeg|png)$/i.test(usuario.foto_url)) {
       const foto = path.join(uploadDir, usuario.foto_url);
       if (fs.existsSync(foto)) fs.unlinkSync(foto);
     }
