@@ -116,6 +116,7 @@
   let estadoPagamento = {
     metodo: "pix", // pix, dinheiro, cartao
     tipoCartao: null, // debito, credito (para cartao)
+    parcelas: 1,
     valorEntregue: 0, // para dinheiro (em centavos)
   };
 
@@ -872,7 +873,7 @@
           id: "caDebito",
           value: "debito",
           onchange: () => {
-            estadoPagamento.tipoCartao = "debito";
+            estadoPagamento.tipoCartao = "debito"; atualizarOpcoesParcelamento();
           },
         }),
         h(
@@ -891,7 +892,7 @@
           id: "caCredito",
           value: "credito",
           onchange: () => {
-            estadoPagamento.tipoCartao = "credito";
+            estadoPagamento.tipoCartao = "credito"; atualizarOpcoesParcelamento();
           },
         }),
         h(
@@ -900,7 +901,11 @@
           "Crédito"
         )
       ),
-      h("small", { class: "text-white-50 d-block mt-2" }, "Escolha uma opção antes de finalizar")
+      h("div", { id: "caSecParcelas", class: "mt-3", hidden: true },
+        h("label", { class: "form-label small", for: "caParcelas" }, "Parcelamento no crédito"),
+        h("select", { id: "caParcelas", class: "form-select bg-dark text-white border-secondary", onchange: () => { estadoPagamento.parcelas = Number($("caParcelas").value || 1); } })
+      ),
+      h("small", { class: "text-white-50 d-block mt-2" }, "Parcelamento disponível somente no crédito.")
     );
 
     container.replaceChildren(opcoesPix, opcoesDinheiro, opcoesCartao, secDinheiro, secCartao);
@@ -929,6 +934,18 @@
       if (debito) debito.checked = false;
       if (credito) credito.checked = false;
     }
+    atualizarOpcoesParcelamento();
+  }
+
+  function maxParcelasCredito(total) {
+    if(total>100000)return 8; if(total>50000)return 5; if(total>10000)return 4; if(total>7500)return 3; return 1;
+  }
+  function atualizarOpcoesParcelamento() {
+    const area=$("caSecParcelas"),select=$("caParcelas"); if(!area||!select)return;
+    const credito=estadoPagamento.metodo==="cartao"&&estadoPagamento.tipoCartao==="credito";
+    const max=credito?maxParcelasCredito(totalCarrinho()):1; area.hidden=!credito||max<=1; select.replaceChildren();
+    for(let n=1;n<=max;n++)select.append(h("option",{value:String(n)},n+"x de até "+brl(Math.ceil(totalCarrinho()/n))+(n>1?" sem juros":"")));
+    estadoPagamento.parcelas=Math.min(estadoPagamento.parcelas||1,max);select.value=String(estadoPagamento.parcelas);
   }
 
   function calcularTroco() {
@@ -1024,6 +1041,7 @@
         bodyPagamento.valor_entregue_centavos = estadoPagamento.valorEntregue;
       } else if (estadoPagamento.metodo === "cartao") {
         bodyPagamento.tipo_cartao = estadoPagamento.tipoCartao;
+        bodyPagamento.parcelas = estadoPagamento.tipoCartao === "credito" ? estadoPagamento.parcelas : 1;
       }
 
       estadoCompra.pagamento = await api(
@@ -1228,7 +1246,8 @@
       "div",
       { class: "bg-secondary-subtle p-4 rounded mb-4" },
       h("h6", { class: "text-white-50 small mb-3" }, "Forma de pagamento"),
-      h("p", { class: "mb-0" }, h("strong", {}, `Cartão de ${tipo}`)),
+      h("p", { class: "mb-0" }, h("strong", {}, `Cartão de ${tipo}${tipo === "Crédito" && Number(pagamento.parcelas || 1) > 1 ? " · " + pagamento.parcelas + "x" : ""}`)),
+      tipo === "Crédito" && Number(pagamento.parcelas || 1) > 1 ? h("p", { class: "small text-info mb-0 mt-2" }, `${pagamento.parcelas} parcelas sem juros`) : null,
       h(
         "p",
         { class: "small text-white-50 mt-3 mb-0" },
@@ -2356,8 +2375,8 @@
 
   function renderPedidosAdmin(lista) {
     const corpo = h("tbody", {}, lista.length ? lista.map((p) => {
-      const metodo = p.pagamento_metodo === "pix" ? "PIX" :
-        p.pagamento_metodo === "cartao" ? (p.tipo_cartao === "credito" ? "Cartão · Crédito" : p.tipo_cartao === "debito" ? "Cartão · Débito" : "Cartão") :
+      const metodo = p.pagamento_metodo === "pix" ? (p.pagamento_status === "confirmado" ? "PIX · Pago" : "PIX") :
+        p.pagamento_metodo === "cartao" ? (p.tipo_cartao === "credito" ? "Cartão · Crédito" : p.tipo_cartao === "debito" ? "Cartão · Débito" : "Cartão") + (p.tipo_cartao === "credito" && Number(p.parcelas||1)>1 ? " · "+p.parcelas+"x" : "") :
         p.pagamento_metodo === "dinheiro" ? "Dinheiro" : "Não informado";
       const detalhes = [];
       if (p.pagamento_metodo === "dinheiro" && p.valor_entregue_centavos != null) {
@@ -2365,8 +2384,9 @@
         detalhes.push("Troco: " + brl(p.troco_centavos || 0));
       }
       if (p.pagamento_metodo === "pix" && p.pagamento_status === "pendente" && p.pagamento_expira_em) {
-        detalhes.push("Prazo até " + new Date(Number(p.pagamento_expira_em)).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
+        detalhes.push("Aguardando pagamento · prazo até " + new Date(Number(p.pagamento_expira_em)).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
       }
+      if (p.pagamento_metodo === "cartao" && p.tipo_cartao === "credito" && Number(p.parcelas||1)>1) detalhes.push(p.parcelas+" parcelas sem juros");
       const pagamentoCell = h("div", {class:"tc-admin-payment"},
         h("div",{class:"fw-semibold"},metodo),
         h("div",{class:"small mt-1"},p.pagamento_status ? badge(PAG[p.pagamento_status] || p.pagamento_status,COR[p.pagamento_status] || "secondary") : badge("Sem pagamento","secondary")),
@@ -2381,8 +2401,8 @@
         h("td",{},badge(STATUS[p.status]||p.status,COR[p.status])),
         h("td",{class:"text-end"},h("div",{class:"d-flex justify-content-end align-items-center gap-1 flex-wrap"},
           h("button",{class:"btn btn-sm btn-outline-secondary",type:"button",onclick:()=>alternarItens(tr,p.id)},"Itens"),
-          ...(p.status==="pendente" && ["cartao","dinheiro"].includes(p.pagamento_metodo) && p.pagamento_status==="pendente"
-            ? [h("button",{class:"btn btn-sm btn-success",type:"button",onclick:()=>confirmarPagamentoPresencial(p.pagamento_id)},"Confirmar recebimento")]
+          ...(p.status==="pendente" && ["cartao","dinheiro"].includes(p.pagamento_metodo) && p.pagamento_status!=="cancelado"
+            ? [h("button",{class:"btn btn-sm btn-success",type:"button",onclick:()=>confirmarPagamentoPresencial(p.pagamento_id)},p.pagamento_status==="confirmado"?"Aprovar pedido":"Confirmar recebimento")]
             : p.status==="pendente" && p.pagamento_metodo==="pix" && p.pagamento_status==="pendente"
               ? [h("span",{class:"small text-warning"},"Aguardando PIX")]
               : p.status==="aprovado"
