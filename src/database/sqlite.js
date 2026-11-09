@@ -103,6 +103,13 @@ if (!pagamentosSql.includes("'dinheiro'")) {
   `);
 }
 
+// Detalhes necessários para registrar dinheiro, tipo de cartão e parcelamento.
+const colunasPagamentos = db.prepare("PRAGMA table_info(pagamentos)").all().map((c) => c.name);
+if (!colunasPagamentos.includes("tipo_cartao")) db.exec("ALTER TABLE pagamentos ADD COLUMN tipo_cartao TEXT");
+if (!colunasPagamentos.includes("parcelas")) db.exec("ALTER TABLE pagamentos ADD COLUMN parcelas INTEGER NOT NULL DEFAULT 1");
+if (!colunasPagamentos.includes("valor_entregue_centavos")) db.exec("ALTER TABLE pagamentos ADD COLUMN valor_entregue_centavos INTEGER");
+if (!colunasPagamentos.includes("troco_centavos")) db.exec("ALTER TABLE pagamentos ADD COLUMN troco_centavos INTEGER");
+
 // Migrações compatíveis com bancos existentes da versão original.
 // Exclusão lógica de produtos: separa remover da loja de ativar/desativar e preserva pedidos antigos.
 const colunasProdutos = db.prepare("PRAGMA table_info(produtos)").all().map((c) => c.name);
