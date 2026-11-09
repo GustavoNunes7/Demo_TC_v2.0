@@ -1515,47 +1515,116 @@
           <div id="gAvisoLista"></div>
         </div>
 
-        <div id="gFinanceiro" hidden>
-          <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-            <h4 class="mb-0 me-auto">Visão financeira</h4>
-            <label class="small" for="gFinMes">Mês de referência</label>
-            <input id="gFinMes" type="month" class="form-control bg-dark text-white border-secondary" style="max-width:180px">
-            <button type="button" class="btn btn-outline-light" id="gFinAtualizar">Atualizar</button>
+        <div id="gFinanceiro" class="tc-finance" hidden>
+          <style>
+            #gFinanceiro{color:#172b3a!important}
+            #gFinanceiro .tc-fin-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+            #gFinanceiro .tc-fin-sub{color:#718096;font-size:.88rem}
+            #gFinanceiro .tc-card{background:#fff;border:1px solid #e7edf2;border-radius:16px;padding:18px;height:100%;box-shadow:0 5px 18px rgba(20,42,60,.045)}
+            #gFinanceiro .tc-kpi{position:relative;overflow:hidden;min-height:118px}
+            #gFinanceiro .tc-kpi:after{content:"";position:absolute;width:74px;height:74px;border-radius:50%;right:-20px;top:-22px;background:var(--tc-tint)}
+            #gFinanceiro .tc-kpi-label{color:#718096;font-size:.82rem;font-weight:600}
+            #gFinanceiro .tc-kpi-value{font-size:clamp(1.35rem,2.5vw,1.9rem);font-weight:750;letter-spacing:-.04em;margin-top:9px}
+            #gFinanceiro .tc-kpi-note{font-size:.75rem;color:#8795a3;margin-top:4px}
+            #gFinanceiro .tc-section-title{font-size:1rem;font-weight:750;margin:0 0 4px;color:#203447}
+            #gFinanceiro .tc-panel-note{font-size:.78rem;color:#8492a0}
+            #gFinanceiro .tc-fin-field{background:#f8fafc!important;color:#203447!important;border:1px solid #dfe7ee!important;border-radius:9px!important}
+            #gFinanceiro .tc-fin-field:focus{border-color:#12bfa5!important;box-shadow:0 0 0 .2rem rgba(18,191,165,.12)!important}
+            #gFinanceiro .tc-fin-btn{background:#08b99e;border:0;color:#fff;font-weight:650;border-radius:9px}
+            #gFinanceiro .tc-fin-btn:hover{background:#079d87;color:#fff}
+            #gFinanceiro .tc-bar-chart{display:flex;align-items:flex-end;gap:clamp(7px,1.5vw,16px);height:205px;padding:14px 4px 0;overflow-x:auto}
+            #gFinanceiro .tc-bar-month{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1 0 34px;height:100%;min-width:34px}
+            #gFinanceiro .tc-bars{height:166px;display:flex;align-items:flex-end;gap:4px}
+            #gFinanceiro .tc-bar{width:12px;min-height:2px;border-radius:5px 5px 2px 2px}
+            #gFinanceiro .tc-legend-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+            #gFinanceiro .tc-pie-wrap{display:flex;align-items:center;justify-content:center;gap:22px;flex-wrap:wrap;padding:10px 0}
+            #gFinanceiro .tc-pie{width:190px;height:190px;border-radius:50%;position:relative;flex:0 0 190px}
+            #gFinanceiro .tc-pie:after{content:"";position:absolute;inset:29%;background:#fff;border-radius:50%;box-shadow:0 0 0 1px #f0f3f5}
+            #gFinanceiro .tc-pie-center{position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;pointer-events:none}
+            #gFinanceiro .tc-pie-center strong{font-size:1.25rem;color:#203447}
+            #gFinanceiro .tc-pie-center span{font-size:.7rem;color:#8492a0}
+            #gFinanceiro .tc-pie-legend{display:grid;gap:9px;min-width:150px;flex:1}
+            #gFinanceiro .tc-pie-item{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.82rem}
+            #gFinanceiro .tc-pie-item-name{display:flex;align-items:center;gap:7px;min-width:0}
+            #gFinanceiro .tc-pie-swatch{width:9px;height:9px;border-radius:3px;flex:0 0 9px}
+            #gFinanceiro .tc-stock-stat{background:#f7fafc;border-radius:11px;padding:12px}
+            #gFinanceiro .tc-stock-stat strong{display:block;font-size:1.25rem;color:#203447}
+            #gFinanceiro .tc-stock-stat span{font-size:.76rem;color:#718096}
+            #gFinanceiro .tc-fin-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #edf1f4}
+            #gFinanceiro .tc-fin-list-row:last-child{border-bottom:0}
+            #gFinanceiro .tc-rank{width:28px;height:28px;border-radius:9px;background:#eafaf6;color:#079d87;display:grid;place-items:center;font-weight:750;font-size:.8rem;flex:0 0 28px}
+            #gFinanceiro .tc-progress{height:6px;background:#edf2f5;border-radius:99px;overflow:hidden;margin-top:7px}
+            #gFinanceiro .tc-progress>span{display:block;height:100%;border-radius:99px;background:#0fc5a6}
+            #gFinanceiro .tc-fin-table{width:100%;font-size:.84rem}
+            #gFinanceiro .tc-fin-table td{padding:10px 6px;border-bottom:1px solid #edf1f4}
+            #gFinanceiro .tc-fin-table tr:last-child td{border-bottom:0}
+            @media(max-width:575px){#gFinanceiro .tc-card{padding:14px;border-radius:13px}#gFinanceiro .tc-pie{width:160px;height:160px;flex-basis:160px}}
+          </style>
+          <div class="tc-fin-head">
+            <div><h3 class="fw-bold mb-1">Visão financeira</h3><div class="tc-fin-sub">Acompanhe receitas, despesas, vendas e movimentações do estoque.</div></div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <label class="small fw-semibold" for="gFinMes">Período</label>
+              <input id="gFinMes" type="month" class="form-control tc-fin-field" style="max-width:175px">
+              <button type="button" class="btn tc-fin-btn px-3" id="gFinAtualizar"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button>
+            </div>
           </div>
-          <div class="row g-3 mb-4">
-            <div class="col-12 col-md-4"><div class="border border-secondary rounded-3 p-3 h-100"><div class="text-secondary small">Faturamento confirmado</div><div class="fs-3 fw-bold" id="gFinReceita">R$ 0,00</div></div></div>
-            <div class="col-12 col-md-4"><div class="border border-secondary rounded-3 p-3 h-100"><div class="text-secondary small">Despesas registradas</div><div class="fs-3 fw-bold" id="gFinDespesas">R$ 0,00</div></div></div>
-            <div class="col-12 col-md-4"><div class="border border-secondary rounded-3 p-3 h-100"><div class="text-secondary small">Resultado estimado</div><div class="fs-3 fw-bold" id="gFinResultado">R$ 0,00</div></div></div>
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#e2fbf4"><div class="tc-kpi-label"><i class="bi bi-graph-up-arrow me-1 text-success"></i>Receita confirmada</div><div class="tc-kpi-value text-success" id="gFinReceita">R$ 0,00</div><div class="tc-kpi-note">Pagamentos confirmados no mês</div></div></div>
+            <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#fff0f0"><div class="tc-kpi-label"><i class="bi bi-arrow-down-right me-1 text-danger"></i>Despesas</div><div class="tc-kpi-value text-danger" id="gFinDespesas">R$ 0,00</div><div class="tc-kpi-note">Despesas registradas no mês</div></div></div>
+            <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#eaf3ff"><div class="tc-kpi-label"><i class="bi bi-wallet2 me-1 text-primary"></i>Resultado estimado</div><div class="tc-kpi-value" id="gFinResultado">R$ 0,00</div><div class="tc-kpi-note">Receitas menos despesas</div></div></div>
+            <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#f2edff"><div class="tc-kpi-label"><i class="bi bi-box-seam me-1" style="color:#8065d8"></i>Unidades em estoque</div><div class="tc-kpi-value" id="gFinUnidades">0</div><div class="tc-kpi-note"><span id="gFinEstoqueBaixo">0</span> produtos com estoque baixo</div></div></div>
           </div>
-          <div class="row g-3 mb-4">
-            <div class="col-12 col-xl-7"><div class="border border-secondary rounded-3 p-3 h-100"><h5>Movimentação mensal (12 meses)</h5><div id="gFinGrafico" class="d-flex align-items-end gap-2 overflow-auto" style="min-height:210px"></div><div class="small text-secondary mt-2">Receita e despesas por mês. Somente pagamentos confirmados entram como faturamento.</div></div></div>
-            <div class="col-12 col-xl-5"><div class="border border-secondary rounded-3 p-3 h-100"><h5>Produtos mais vendidos</h5><div id="gFinMaisVendidos"></div></div></div>
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-xl-7"><div class="tc-card">
+              <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2"><div><h5 class="tc-section-title">Fluxo financeiro</h5><div class="tc-panel-note">Comparativo dos últimos 12 meses</div></div><div class="small d-flex gap-3"><span><i class="tc-legend-dot" style="background:#0fc5a6"></i>Receitas</span><span><i class="tc-legend-dot" style="background:#ff6685"></i>Despesas</span></div></div>
+              <div id="gFinGrafico" class="tc-bar-chart"></div><div class="tc-panel-note mt-2">Valores em reais. Passe o cursor sobre as barras para consultar os totais.</div>
+            </div></div>
+            <div class="col-12 col-xl-5"><div class="tc-card">
+              <div class="mb-2"><h5 class="tc-section-title">Produtos mais vendidos</h5><div class="tc-panel-note">Participação de cada produto nas unidades vendidas</div></div>
+              <div id="gFinPizza" class="tc-pie-wrap"></div>
+              <div class="border-top pt-2 mt-2"><div class="tc-section-title mb-2">Ranking de vendas</div><div id="gFinMaisVendidos"></div></div>
+            </div></div>
           </div>
-          <div class="border border-secondary rounded-3 p-3 mb-4">
-            <h5 class="mb-3">Comprar reposição de estoque</h5>
-            <form id="gEstoqueCompra" class="row g-2">
-              <div class="col-12 col-md-4"><label class="form-label small" for="gEstoqueProduto">Produto</label><select id="gEstoqueProduto" class="form-select bg-dark text-white border-secondary" required></select></div>
-              <div class="col-6 col-md-2"><label class="form-label small" for="gEstoqueQtd">Quantidade</label><input id="gEstoqueQtd" type="number" min="1" step="1" class="form-control bg-dark text-white border-secondary" required></div>
-              <div class="col-6 col-md-2"><label class="form-label small" for="gEstoqueCusto">Custo unitário (R$)</label><input id="gEstoqueCusto" type="number" min="0.01" step="0.01" class="form-control bg-dark text-white border-secondary" required></div>
-              <div class="col-12 col-md-2"><label class="form-label small" for="gEstoqueData">Data da compra</label><input id="gEstoqueData" type="date" class="form-control bg-dark text-white border-secondary" required></div>
-              <div class="col-12 col-md-2 d-flex align-items-end"><button class="btn btn-danger w-100" type="submit">Registrar compra</button></div>
-              <div class="col-12"><label class="form-label small" for="gEstoqueObs">Observação (opcional)</label><input id="gEstoqueObs" maxlength="180" class="form-control bg-dark text-white border-secondary" placeholder="Fornecedor ou detalhes"></div>
-            </form>
-            <div id="gEstoqueMsg" class="small mt-2" role="status"></div>
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-xl-7"><div class="tc-card">
+              <div class="mb-3"><h5 class="tc-section-title">Entrada de mercadorias</h5><div class="tc-panel-note">Registre compras e atualize o saldo do estoque automaticamente.</div></div>
+              <form id="gEstoqueCompra" class="row g-3">
+                <div class="col-12 col-md-6"><label class="form-label small fw-semibold" for="gEstoqueProduto">Produto</label><select id="gEstoqueProduto" class="form-select tc-fin-field" required></select></div>
+                <div class="col-6 col-md-3"><label class="form-label small fw-semibold" for="gEstoqueQtd">Quantidade</label><input id="gEstoqueQtd" type="number" min="1" step="1" class="form-control tc-fin-field" required></div>
+                <div class="col-6 col-md-3"><label class="form-label small fw-semibold" for="gEstoqueCusto">Custo unitário (R$)</label><input id="gEstoqueCusto" type="number" min="0.01" step="0.01" class="form-control tc-fin-field" required></div>
+                <div class="col-12 col-md-5"><label class="form-label small fw-semibold" for="gEstoqueData">Data da compra</label><input id="gEstoqueData" type="date" class="form-control tc-fin-field" required></div>
+                <div class="col-12 col-md-7"><label class="form-label small fw-semibold" for="gEstoqueObs">Fornecedor / observação</label><input id="gEstoqueObs" maxlength="180" class="form-control tc-fin-field" placeholder="Opcional"></div>
+                <div class="col-12"><button class="btn tc-fin-btn px-4" type="submit"><i class="bi bi-plus-circle me-1"></i>Registrar entrada</button></div>
+              </form>
+              <div id="gEstoqueMsg" class="small mt-3" role="status"></div>
+            </div></div>
+            <div class="col-12 col-xl-5"><div class="tc-card">
+              <div class="mb-3"><h5 class="tc-section-title">Resumo do estoque</h5><div class="tc-panel-note">Visão rápida dos níveis atuais</div></div>
+              <div class="row g-2 mb-3">
+                <div class="col-6"><div class="tc-stock-stat"><strong id="gFinEstoqueProdutos">0</strong><span>Produtos ativos</span></div></div>
+                <div class="col-6"><div class="tc-stock-stat"><strong id="gFinEstoqueBaixoCard">0</strong><span>Estoque baixo (até 3)</span></div></div>
+              </div>
+              <div class="tc-panel-note mb-2">Produtos para reposição</div><div id="gFinEstoqueLista" class="small">Carregando estoque...</div>
+            </div></div>
           </div>
-          <div class="border border-secondary rounded-3 p-3 mb-4">
-            <h5 class="mb-3">Registrar outra despesa</h5>
-            <form id="gFinDespesaForm" class="row g-2">
-              <div class="col-12 col-md-3"><label class="form-label small" for="gFinCategoria">Categoria</label><select id="gFinCategoria" class="form-select bg-dark text-white border-secondary"><option>Operacional</option><option>Material</option><option>Manutenção</option><option>Serviços</option><option>Outros</option></select></div>
-              <div class="col-12 col-md-4"><label class="form-label small" for="gFinDescricao">Descrição</label><input id="gFinDescricao" maxlength="180" class="form-control bg-dark text-white border-secondary" required></div>
-              <div class="col-6 col-md-2"><label class="form-label small" for="gFinValor">Valor (R$)</label><input id="gFinValor" type="number" min="0.01" step="0.01" class="form-control bg-dark text-white border-secondary" required></div>
-              <div class="col-6 col-md-2"><label class="form-label small" for="gFinData">Data</label><input id="gFinData" type="date" class="form-control bg-dark text-white border-secondary" required></div>
-              <div class="col-12 col-md-1 d-flex align-items-end"><button class="btn btn-outline-light w-100" type="submit">Salvar</button></div>
-            </form>
-            <div id="gFinDespesaMsg" class="small mt-2" role="status"></div>
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-xl-5"><div class="tc-card">
+              <div class="mb-3"><h5 class="tc-section-title">Registrar despesa</h5><div class="tc-panel-note">Lance custos que não vieram de compras de estoque.</div></div>
+              <form id="gFinDespesaForm" class="row g-2">
+                <div class="col-12 col-md-6"><label class="form-label small fw-semibold" for="gFinCategoria">Categoria</label><select id="gFinCategoria" class="form-select tc-fin-field"><option>Operacional</option><option>Material</option><option>Manutenção</option><option>Serviços</option><option>Outros</option></select></div>
+                <div class="col-12 col-md-6"><label class="form-label small fw-semibold" for="gFinValor">Valor (R$)</label><input id="gFinValor" type="number" min="0.01" step="0.01" class="form-control tc-fin-field" required></div>
+                <div class="col-12"><label class="form-label small fw-semibold" for="gFinDescricao">Descrição</label><input id="gFinDescricao" maxlength="180" class="form-control tc-fin-field" required></div>
+                <div class="col-12"><label class="form-label small fw-semibold" for="gFinData">Data</label><input id="gFinData" type="date" class="form-control tc-fin-field" required></div>
+                <div class="col-12"><button class="btn btn-outline-secondary px-4" type="submit">Salvar despesa</button></div>
+              </form>
+              <div id="gFinDespesaMsg" class="small mt-2" role="status"></div>
+            </div></div>
+            <div class="col-12 col-xl-7"><div class="tc-card">
+              <div class="mb-3"><h5 class="tc-section-title">Despesas recentes</h5><div class="tc-panel-note">Últimos lançamentos registrados</div></div>
+              <div id="gFinHistorico"></div>
+            </div></div>
           </div>
-          <div class="border border-secondary rounded-3 p-3"><h5>Despesas recentes</h5><div id="gFinHistorico"></div></div>
-          <div id="gFinMsg" role="alert" class="small mt-3"></div>
+          <div id="gFinMsg" role="status" class="small mt-2"></div>
         </div>
         <div id="gPedidos" hidden>
           <div class="d-flex flex-wrap gap-2 mb-3">
@@ -1724,20 +1793,61 @@
       const max=Math.max(1,...dados.grafico.flatMap(x=>[x.receita,x.despesas]));
       const graf=$("gFinGrafico");graf.replaceChildren();
       for(const item of dados.grafico){
-        const coluna=h("div",{class:"d-flex flex-column align-items-center justify-content-end flex-shrink-0",style:"width:52px;height:190px"});
-        const barras=h("div",{class:"d-flex align-items-end gap-1",style:"height:155px"});
-        barras.append(h("div",{title:"Receita: "+valorReal(item.receita),class:"rounded-top bg-success",style:"width:14px;height:"+Math.max(2,item.receita/max*145)+"px"}));
-        barras.append(h("div",{title:"Despesas: "+valorReal(item.despesas),class:"rounded-top bg-danger",style:"width:14px;height:"+Math.max(2,item.despesas/max*145)+"px"}));
-        coluna.append(barras,h("span",{class:"small text-secondary mt-2"},item.mes.slice(5)));
+        const coluna=h("div",{class:"tc-bar-month"});
+        const barras=h("div",{class:"tc-bars"});
+        barras.append(h("div",{class:"tc-bar",title:"Receita: "+valorReal(item.receita),style:"height:"+Math.max(2,item.receita/max*155)+"px;background:#0fc5a6"}));
+        barras.append(h("div",{class:"tc-bar",title:"Despesas: "+valorReal(item.despesas),style:"height:"+Math.max(2,item.despesas/max*155)+"px;background:#ff6685"}));
+        coluna.append(barras,h("span",{class:"small mt-2",style:"color:#8492a0"},item.mes.slice(5)));
         graf.append(coluna);
       }
-      const mais=$("gFinMaisVendidos");mais.replaceChildren();
-      if(!dados.mais_vendidos.length)mais.append(h("p",{class:"text-secondary"},"Ainda não há vendas com pagamento confirmado."));
-      dados.mais_vendidos.forEach((p,i)=>{
-        const linha=h("div",{class:"d-flex justify-content-between gap-2 border-bottom border-secondary py-2"});
-        linha.append(h("span",{},(i+1)+". "+p.nome),h("strong",{},p.quantidade+" un."));
-        mais.append(linha);
+      const estoque=dados.estoque||{};
+      $("gFinUnidades").textContent=Number(estoque.unidades||0).toLocaleString("pt-BR");
+      $("gFinEstoqueBaixo").textContent=Number(estoque.baixo||0).toLocaleString("pt-BR");
+      $("gFinEstoqueProdutos").textContent=Number(estoque.produtos||0).toLocaleString("pt-BR");
+      $("gFinEstoqueBaixoCard").textContent=Number(estoque.baixo||0).toLocaleString("pt-BR");
+      const baixo=produtos.filter(p=>Number(p.estoque)<=3);
+      const listaEstoque=$("gFinEstoqueLista");listaEstoque.replaceChildren();
+      if(!baixo.length) listaEstoque.append(h("div",{class:"text-success py-2"},"Todos os produtos estão com estoque acima do limite mínimo."));
+      baixo.slice(0,6).forEach(p=>{
+        const linha=h("div",{class:"tc-fin-list-row"});
+        linha.append(h("span",{class:"text-truncate",style:"color:#34495a"},p.nome),h("strong",{class:"text-danger flex-shrink-0"},Number(p.estoque)+" un."));
+        listaEstoque.append(linha);
       });
+      const mais=$( "gFinMaisVendidos");mais.replaceChildren();
+      const pizza=$( "gFinPizza");pizza.replaceChildren();
+      const cores=["#10c5a5","#3f8efc","#f4d94e","#b58be8","#ff8a65","#55b7d8","#ef72ae","#93a4b5"];
+      const vendidos=dados.mais_vendidos||[];
+      const totalVendidos=vendidos.reduce((sum,p)=>sum+Number(p.quantidade||0),0);
+      if(!vendidos.length){
+        mais.append(h("p",{class:"tc-panel-note mb-0"},"Ainda não há vendas com pagamento confirmado."));
+        pizza.append(h("p",{class:"tc-panel-note mb-0"},"O gráfico aparecerá quando houver vendas confirmadas."));
+      }else{
+        let acumulado=0;
+        const fatias=vendidos.map((p,i)=>{
+          const percentual=totalVendidos?Number(p.quantidade||0)/totalVendidos*100:0;
+          const inicio=acumulado;acumulado+=percentual;
+          return {p,i,percentual,inicio,fim:acumulado};
+        });
+        const gradiente=fatias.map(f=>cores[f.i]+" "+f.inicio.toFixed(2)+"% "+f.fim.toFixed(2)+"%").join(",");
+        const donut=h("div",{class:"tc-pie",style:"background:conic-gradient("+gradiente+")"});
+        donut.append(h("div",{class:"tc-pie-center"},h("strong",{},totalVendidos.toLocaleString("pt-BR")),h("span",{},"unidades vendidas")));
+        const legenda=h("div",{class:"tc-pie-legend"});
+        fatias.forEach(f=>{
+          const item=h("div",{class:"tc-pie-item"});
+          const nome=h("span",{class:"tc-pie-item-name"});
+          nome.append(h("i",{class:"tc-pie-swatch",style:"background:"+cores[f.i]}),h("span",{class:"text-truncate",style:"color:#536575"},f.p.nome));
+          item.append(nome,h("strong",{style:"color:#203447"},f.percentual.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%"));
+          legenda.append(item);
+        });
+        pizza.append(donut,legenda);
+        fatias.forEach((f)=>{
+          const linha=h("div",{class:"tc-fin-list-row"});
+          const esquerda=h("div",{class:"d-flex align-items-center gap-2 flex-grow-1",style:"min-width:0"});
+          esquerda.append(h("span",{class:"tc-rank"},String(f.i+1)),h("div",{class:"flex-grow-1",style:"min-width:0"},h("div",{class:"small fw-semibold text-truncate",style:"color:#34495a"},f.p.nome),h("div",{class:"tc-progress"},h("span",{style:"width:"+f.percentual+"%;background:"+cores[f.i]}))));
+          linha.append(esquerda,h("div",{class:"text-end flex-shrink-0"},h("strong",{class:"small",style:"color:#203447"},Number(f.p.quantidade).toLocaleString("pt-BR")+" un."),h("div",{class:"tc-panel-note"},f.percentual.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%")));
+          mais.append(linha);
+        });
+      }
       const hist=$("gFinHistorico");hist.replaceChildren();
       if(!dados.despesas.length)hist.append(h("p",{class:"text-secondary"},"Nenhuma despesa registrada."));
       else dados.despesas.forEach(d=>{
