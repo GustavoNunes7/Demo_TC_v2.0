@@ -5,6 +5,7 @@ const publicUser = (u) =>
     nome: u.nome,
     email: u.email,
     papel: u.papel,
+    admin_lider: u.admin_lider === 1,
     turma: u.turma,
     matricula: u.matricula || "",
     telefone: u.telefone,
