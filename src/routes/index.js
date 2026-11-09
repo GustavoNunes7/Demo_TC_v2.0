@@ -361,16 +361,31 @@ r.post("/admin/transferir-lideranca", autenticar, admin, lider, (req, res) => {
   res.json({ ok: true, mensagem: "Liderança transferida com sucesso. Entre novamente para atualizar as permissões." });
 });
 
-// A remoção de um administrador é lógica: preserva pedidos, documentos e histórico.
+// Exclusão lógica de alunos e remoção de acesso administrativo: preserva o histórico relacionado.
 r.delete("/usuarios/:id", autenticar, admin, lider, (req, res) => {
   const id = positiveId(req.params.id);
   const usuario = get("usuarios", id);
-  if (!usuario) return res.sendStatus(404);
+  if (!usuario || usuario.ativo === 0) return res.sendStatus(404);
   if (usuario.admin_lider === 1 || usuario.id === req.usuario.id)
     return res.status(403).json({ erro: "O Administrador Líder não pode remover a própria conta nem a liderança atual." });
+
+  if (usuario.papel === "aluno") {
+    db.transaction(() => {
+      db.prepare("UPDATE recuperacoes SET usado=1 WHERE usuario_id=?").run(id);
+      db.prepare("UPDATE usuarios SET ativo=0,token_versao=token_versao+1,email=?,nome=?,telefone=NULL,foto_url=NULL,cpf=NULL,data_nascimento=NULL,genero=NULL,observacao=NULL,matricula=NULL,turma=NULL WHERE id=?")
+        .run(`removida+${id}+${Date.now()}@conta.invalid`, `Conta removida #${id}`, id);
+    })();
+    if (usuario.foto_url && /^[a-f0-9-]+\\.(jpg|jpeg|png)$/i.test(usuario.foto_url)) {
+      const foto = path.join(uploadDir, usuario.foto_url);
+      if (fs.existsSync(foto)) fs.unlinkSync(foto);
+    }
+    notificarAdmins("Aluno removido", `A conta do aluno #${id} foi desativada pela Administração Líder. Pedidos, pagamentos e registros relacionados foram preservados.`);
+    return res.json({ ok: true, mensagem: "Aluno removido. O acesso foi bloqueado e o histórico foi preservado." });
+  }
+
   if (usuario.papel !== "admin")
-    return bad(res, "Esta ação é exclusiva para remover o acesso de outro administrador.");
-  db.prepare("UPDATE usuarios SET ativo=0 WHERE id=?").run(id);
+    return bad(res, "Tipo de usuário inválido.");
+  db.prepare("UPDATE usuarios SET ativo=0,token_versao=token_versao+1 WHERE id=?").run(id);
   res.json({ ok: true, mensagem: "Acesso administrativo removido. O histórico foi preservado." });
 });
 
