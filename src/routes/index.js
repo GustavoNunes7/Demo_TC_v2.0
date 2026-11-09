@@ -23,6 +23,30 @@ const get = (table, id) =>
   db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(id);
 const allowed = (value, values) => values.includes(value);
 
+// PIX pendente expira em 15 minutos; ao expirar, cancela o pedido e devolve o estoque reservado.
+function expirarPixPendentes() {
+  const expirados = db.prepare(`
+    SELECT pg.id AS pagamento_id, pg.pedido_id
+    FROM pagamentos pg JOIN pedidos p ON p.id=pg.pedido_id
+    WHERE pg.metodo='pix' AND pg.status='pendente'
+      AND pg.expira_em IS NOT NULL AND pg.expira_em<=? AND p.status='pendente'
+  `).all(Date.now());
+  if (!expirados.length) return;
+  db.transaction(() => {
+    for (const item of expirados) {
+      for (const produto of db.prepare("SELECT produto_id,quantidade FROM itens_pedido WHERE pedido_id=?").all(item.pedido_id)) {
+        db.prepare("UPDATE produtos SET estoque=estoque+? WHERE id=?").run(produto.quantidade, produto.produto_id);
+      }
+      db.prepare("UPDATE pagamentos SET status='cancelado' WHERE id=? AND status='pendente'").run(item.pagamento_id);
+      db.prepare("UPDATE pedidos SET status='cancelado' WHERE id=? AND status='pendente'").run(item.pedido_id);
+    }
+  })();
+}
+const timerExpiracaoPix = setInterval(() => {
+  try { expirarPixPendentes(); } catch (erro) { console.error("Falha ao expirar PIX:", erro); }
+}, 30_000);
+timerExpiracaoPix.unref?.();
+
 // Código de retirada separado do código PIX, persistido por pedido.
 db.exec(`
   CREATE TABLE IF NOT EXISTS tokens_retirada (
@@ -412,7 +436,9 @@ r.get("/admin/pedidos", autenticar, admin, (req, res) => {
     SELECT p.id, p.usuario_id, p.status, p.observacao, p.criado_em,
       u.nome AS cliente, u.email AS cliente_email,
       COALESCE(SUM(i.quantidade * i.preco_unitario_centavos),0) AS total_centavos,
-      pg.status AS pagamento_status, pg.metodo AS pagamento_metodo
+      pg.status AS pagamento_status, pg.metodo AS pagamento_metodo,
+      pg.id AS pagamento_id, pg.expira_em AS pagamento_expira_em, pg.tipo_cartao,
+      pg.valor_entregue_centavos, pg.troco_centavos
     FROM pedidos p JOIN usuarios u ON u.id=p.usuario_id
     LEFT JOIN itens_pedido i ON i.pedido_id=p.id
     LEFT JOIN pagamentos pg ON pg.pedido_id=p.id
@@ -690,44 +716,32 @@ r.get("/pedidos/:id/token", autenticar, (req, res) => {
 });
 // Pagamentos
 r.post("/pedidos/:id/pagamento", autenticar, (req, res) => {
-  const pedidoId = positiveId(req.params.id);
-  const metodo = req.body.metodo;
-
-  if (!allowed(metodo, ["pix", "cartao", "dinheiro"]))
-    return bad(res, "Forma de pagamento inválida.");
-
+  const pedidoId = positiveId(req.params.id), metodo = req.body.metodo;
+  if (!allowed(metodo, ["pix", "cartao", "dinheiro"])) return bad(res, "Forma de pagamento inválida.");
   const pedido = get("pedidos", pedidoId);
-
   if (!pedido) return res.status(404).json({ erro: "Pedido não encontrado." });
-
-  if (pedido.usuario_id !== req.usuario.id && req.usuario.papel !== "admin")
-    return res.sendStatus(403);
-
-  if (pedido.status !== "pendente")
-    return bad(res, "Este pedido não pode receber pagamento.");
-
-  const existente = db
-    .prepare("SELECT * FROM pagamentos WHERE pedido_id=?")
-    .get(pedidoId);
-
+  if (pedido.usuario_id !== req.usuario.id && req.usuario.papel !== "admin") return res.sendStatus(403);
+  if (pedido.status !== "pendente") return bad(res, "Este pedido não pode receber pagamento.");
+  const existente = db.prepare("SELECT * FROM pagamentos WHERE pedido_id=?").get(pedidoId);
   if (existente) return res.json(existente);
-
-  const total = db
-    .prepare(
-      "SELECT COALESCE(SUM(quantidade * preco_unitario_centavos), 0) AS total FROM itens_pedido WHERE pedido_id=?",
-    )
-    .get(pedidoId).total;
-
-  const codigo =
-    metodo === "pix" ? crypto.randomBytes(16).toString("hex") : null;
-
-  const info = db
-    .prepare(
-      "INSERT INTO pagamentos(pedido_id,metodo,valor_centavos,codigo) VALUES(?,?,?,?)",
-    )
-    .run(pedidoId, metodo, total, codigo);
-
-  notificarAdmins("Novo pagamento de aluno", `Foi iniciado um pagamento para o pedido #${pedido.id} (aluno #${pedido.usuario_id}).`);
+  const total = Number(db.prepare("SELECT COALESCE(SUM(quantidade * preco_unitario_centavos), 0) AS total FROM itens_pedido WHERE pedido_id=?").get(pedidoId).total);
+  let valorEntregue = null, troco = null, tipoCartao = null;
+  if (metodo === "dinheiro") {
+    valorEntregue = Number(req.body.valor_entregue_centavos);
+    if (!Number.isSafeInteger(valorEntregue) || valorEntregue < total) return bad(res, "Informe um valor em dinheiro igual ou superior ao total.");
+    troco = valorEntregue - total;
+  }
+  if (metodo === "cartao") {
+    tipoCartao = req.body.tipo_cartao;
+    if (!allowed(tipoCartao, ["debito", "credito"])) return bad(res, "Selecione débito ou crédito.");
+  }
+  const codigo = metodo === "pix" ? crypto.randomBytes(16).toString("hex") : null;
+  const expiraEm = metodo === "pix" ? Date.now() + 15 * 60 * 1000 : null;
+  const info = db.prepare(`
+    INSERT INTO pagamentos(pedido_id,metodo,valor_centavos,codigo,expira_em,tipo_cartao,valor_entregue_centavos,troco_centavos)
+    VALUES(?,?,?,?,?,?,?,?)
+  `).run(pedidoId, metodo, total, codigo, expiraEm, tipoCartao, valorEntregue, troco);
+  notificarAdmins("Novo pagamento de aluno", `Foi iniciado um pagamento ${metodo.toUpperCase()} para o pedido #${pedido.id} (aluno #${pedido.usuario_id}).`);
   res.status(201).json(get("pagamentos", info.lastInsertRowid));
 });
 
@@ -818,6 +832,29 @@ r.post("/pagamentos/:id/confirmar-simulado", autenticar, (req, res) => {
 
   res.json(get("pagamentos", pagamento.id));
 });
+r.post("/admin/pagamentos/:id/confirmar-presencial", autenticar, admin, (req, res) => {
+  const pagamento = get("pagamentos", positiveId(req.params.id));
+  if (!pagamento) return res.status(404).json({ erro: "Pagamento não encontrado." });
+  if (!["cartao", "dinheiro"].includes(pagamento.metodo)) return bad(res, "Esta confirmação é exclusiva para cartão e dinheiro.");
+  if (pagamento.status !== "pendente") return bad(res, "Este pagamento já foi processado.");
+  const pedido = get("pedidos", pagamento.pedido_id);
+  if (!pedido || pedido.status !== "pendente") return bad(res, "Este pedido não está aguardando confirmação.");
+  db.transaction(() => {
+    db.prepare("UPDATE pagamentos SET status='confirmado' WHERE id=? AND status='pendente'").run(pagamento.id);
+    db.prepare("UPDATE pedidos SET status='aprovado' WHERE id=? AND status='pendente'").run(pedido.id);
+    const existente = db.prepare("SELECT id FROM tokens_retirada WHERE pedido_id=?").get(pedido.id);
+    if (!existente) {
+      let token;
+      do { token = String(crypto.randomInt(100000, 1000000)); }
+      while (db.prepare("SELECT id FROM tokens_retirada WHERE token=?").get(token));
+      db.prepare("INSERT INTO tokens_retirada(pedido_id,token,expira_em) VALUES(?,?,?)").run(pedido.id, token, Date.now() + 15 * 60 * 1000);
+    }
+  })();
+  db.prepare("INSERT INTO notificacoes(usuario_id,titulo,mensagem) VALUES(?,?,?)")
+    .run(pedido.usuario_id, "Pagamento confirmado", `O pagamento presencial do pedido #${pedido.id} foi confirmado. Seu token de retirada está disponível por 15 minutos.`);
+  res.json({ ok: true, pagamento: get("pagamentos", pagamento.id), pedido: detalharPedido(pedido.id) });
+});
+
 r.patch("/pedidos/:id/status", autenticar, admin, (req, res) => {
   const p = get("pedidos", positiveId(req.params.id)),
     status = req.body.status;
