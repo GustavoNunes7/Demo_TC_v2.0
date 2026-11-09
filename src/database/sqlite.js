@@ -118,7 +118,35 @@ if (!colunasUsuarios.includes("genero")) db.exec("ALTER TABLE usuarios ADD COLUM
 if (!colunasUsuarios.includes("observacao")) db.exec("ALTER TABLE usuarios ADD COLUMN observacao TEXT");
 if (!colunasUsuarios.includes("admin_lider")) db.exec("ALTER TABLE usuarios ADD COLUMN admin_lider INTEGER NOT NULL DEFAULT 0 CHECK(admin_lider IN (0,1))");
 if (!colunasUsuarios.includes("token_versao")) db.exec("ALTER TABLE usuarios ADD COLUMN token_versao INTEGER NOT NULL DEFAULT 0");
-db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_admin_lider_unico ON usuarios(admin_lider) WHERE admin_lider=1");
+db.exec("DROP INDEX IF EXISTS idx_usuarios_admin_lider_unico");
+db.exec("CREATE INDEX IF NOT EXISTS idx_usuarios_admin_lider ON usuarios(admin_lider) WHERE admin_lider=1");
+db.exec(`
+CREATE TABLE IF NOT EXISTS movimentacoes_estoque (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ produto_id INTEGER NOT NULL REFERENCES produtos(id),
+ tipo TEXT NOT NULL CHECK(tipo IN ('entrada_compra','entrada_ajuste','saida_ajuste')),
+ quantidade INTEGER NOT NULL CHECK(quantidade > 0),
+ custo_unitario_centavos INTEGER NOT NULL DEFAULT 0 CHECK(custo_unitario_centavos >= 0),
+ total_centavos INTEGER NOT NULL DEFAULT 0 CHECK(total_centavos >= 0),
+ observacao TEXT DEFAULT '',
+ usuario_id INTEGER REFERENCES usuarios(id),
+ criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS despesas_financeiras (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ categoria TEXT NOT NULL,
+ descricao TEXT NOT NULL,
+ valor_centavos INTEGER NOT NULL CHECK(valor_centavos > 0),
+ data_despesa TEXT NOT NULL,
+ origem TEXT NOT NULL DEFAULT 'manual' CHECK(origem IN ('manual','compra_estoque')),
+ produto_id INTEGER REFERENCES produtos(id),
+ quantidade INTEGER CHECK(quantidade IS NULL OR quantidade > 0),
+ usuario_id INTEGER REFERENCES usuarios(id),
+ criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_despesas_data ON despesas_financeiras(data_despesa);
+CREATE INDEX IF NOT EXISTS idx_mov_estoque_produto_data ON movimentacoes_estoque(produto_id,criado_em);
+`);
 
 const colunasPedidos = db.prepare("PRAGMA table_info(pedidos)").all().map((c) => c.name);
 if (!colunasPedidos.includes("chave_idempotencia")) db.exec("ALTER TABLE pedidos ADD COLUMN chave_idempotencia TEXT");
