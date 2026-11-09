@@ -486,21 +486,23 @@
       sair.dataset.apiWired = "1";
       sair.addEventListener("click", () => { sessionStorage.removeItem("techcampus_token"); sessionStorage.removeItem("techcampus_usuario"); location.replace("/landing/index.html"); });
     }
-    const encerrar = document.createElement("button");
-    encerrar.type = "button"; encerrar.className = "btn btn-outline-danger mt-3"; encerrar.textContent = "Encerrar minha conta";
-    encerrar.addEventListener("click", async () => {
-      const senha = prompt("Para encerrar a conta, confirme sua senha:");
-      if (senha === null) return;
-      if (!senha) return avisar("Informe sua senha para continuar.", true);
-      if (!confirm("Essa ação desativará seu acesso ao TechCampus. Deseja continuar?")) return;
-      try {
-        await api("/perfil", { method: "DELETE", body: JSON.stringify({ senha }) });
-        sessionStorage.removeItem("techcampus_token"); sessionStorage.removeItem("techcampus_usuario");
-        alert("Conta encerrada."); location.replace("/landing/index.html");
-      } catch (e) { avisar(e.message, true); }
-    });
     const seguranca = [...document.querySelectorAll(".settings-card")].find((card) => /segurança/i.test(card.textContent));
-    if (seguranca && !seguranca.querySelector("#tc-encerrar-conta")) { encerrar.id = "tc-encerrar-conta"; seguranca.append(encerrar); }
+    if (perfilAtual?.papel === "aluno" && seguranca && !seguranca.querySelector("#tc-encerrar-conta")) {
+      const encerrar = document.createElement("button"); encerrar.id = "tc-encerrar-conta"; encerrar.type = "button"; encerrar.className = "btn btn-outline-danger mt-3"; encerrar.textContent = "Encerrar minha conta";
+      encerrar.addEventListener("click", async () => {
+        const senha = prompt("Para encerrar a conta, confirme sua senha:");
+        if (senha === null) return;
+        if (!senha) return avisar("Informe sua senha para continuar.", true);
+        if (!confirm("Sua conta será desativada e seus dados de perfil serão removidos. Pedidos e pagamentos serão preservados. Deseja continuar?")) return;
+        encerrar.disabled = true;
+        try {
+          await api("/perfil", { method: "DELETE", body: JSON.stringify({ senha }) });
+          sessionStorage.removeItem("techcampus_token"); sessionStorage.removeItem("techcampus_usuario"); localStorage.removeItem("techcampusConfiguracoes");
+          alert("Sua conta foi encerrada. O histórico de pedidos e pagamentos foi preservado."); location.replace("/frontend/login.html");
+        } catch (e) { avisar(e.message, true); encerrar.disabled = false; }
+      });
+      seguranca.append(encerrar);
+    }
   }
   document.addEventListener("DOMContentLoaded", iniciar);
 })();
