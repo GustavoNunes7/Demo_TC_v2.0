@@ -207,12 +207,15 @@
       // Sem foto ou API indisponível: manter a imagem padrão desta conta.
     }
   }
-  function ligarGerenciamentoUsuarios() {
+  function ligarGerenciamentoUsuarios(perfilAtual) {
+    const ehLider = perfilAtual?.admin_lider === true;
     const tabela = document.getElementById("tabelaUsuarios");
     const form = document.getElementById("formUsuario");
     const botaoNovo = document.getElementById("btnNovoUsuario");
     if (!tabela || !form || !botaoNovo || form.dataset.apiWired) return;
     form.dataset.apiWired = "1";
+    const opcaoAdmin = campo("usuarioTipo")?.querySelector('option[value="admin"]');
+    if (opcaoAdmin) opcaoAdmin.hidden = !ehLider;
     let usuarios = [];
     const fotoObjectUrls = new Set();
     const modalEl = document.getElementById("modalUsuario");
@@ -227,6 +230,18 @@
     async function carregar() {
       try {
         usuarios = await api("/usuarios");
+        const existeLider = usuarios.some(u => u.admin_lider === true);
+        let assumir = document.getElementById("btnAssumirLideranca");
+        if (!existeLider && !assumir) {
+          assumir = document.createElement("button");
+          assumir.id = "btnAssumirLideranca"; assumir.type = "button"; assumir.className = "btn btn-outline-warning me-2"; assumir.textContent = "Assumir liderança";
+          botaoNovo.parentElement?.insertBefore(assumir, botaoNovo);
+          assumir.addEventListener("click", async () => {
+            if (!confirm("Assumir a função única de Administrador Líder deste TechCampus?")) return;
+            try { await api("/admin/assumir-lideranca", { method: "POST" }); location.reload(); }
+            catch (e) { mostrarErro(e.message); }
+          });
+        } else if (existeLider && assumir) assumir.remove();
         campo("totalAlunos") && (campo("totalAlunos").textContent = String(usuarios.filter(u => u.papel === "aluno").length));
         campo("totalAtivos") && (campo("totalAtivos").textContent = String(usuarios.filter(u => u.ativo !== 0).length));
         renderizar();
@@ -266,18 +281,43 @@
             })
             .catch(() => {});
         }
-        for (const valor of [u.nome, u.matricula || "—", u.email, u.papel === "admin" ? "Administrador" : "Aluno", u.ativo === 0 ? "Inativo" : "Ativo"]) {
+        for (const valor of [u.nome, u.matricula || "—", u.email, u.admin_lider ? "Administrador Líder" : u.papel === "admin" ? "Administrador" : "Aluno", u.ativo === 0 ? "Inativo" : "Ativo"]) {
           const td = document.createElement("td"); td.textContent = valor || "—"; tr.append(td);
         }
         const acoes = document.createElement("td"); acoes.className = "text-end text-nowrap";
-        const editar = document.createElement("button"); editar.type = "button"; editar.className = "btn btn-sm btn-outline-primary me-1"; editar.textContent = "Editar"; editar.addEventListener("click", () => abrir(u));
-        const statusBtn = document.createElement("button"); statusBtn.type = "button"; statusBtn.className = `btn btn-sm ${u.ativo === 0 ? "btn-outline-success" : "btn-outline-danger"}`; statusBtn.textContent = u.ativo === 0 ? "Ativar" : "Desativar";
-        statusBtn.addEventListener("click", async () => {
-          if (!confirm(`${u.ativo === 0 ? "Ativar" : "Desativar"} a conta de ${u.nome}?`)) return;
-          try { await api(`/usuarios/${u.id}`, { method: "PATCH", body: JSON.stringify({ ativo: u.ativo === 0 ? 1 : 0 }) }); await carregar(); }
-          catch (e) { mostrarErro(e.message); }
-        });
-        acoes.append(editar, statusBtn); tr.append(acoes); tabela.append(tr);
+        if (u.admin_lider) {
+          acoes.textContent = "Líder atual";
+        } else if (u.papel === "admin" && !ehLider) {
+          acoes.textContent = "Protegido";
+        } else {
+          const editar = document.createElement("button"); editar.type = "button"; editar.className = "btn btn-sm btn-outline-primary me-1"; editar.textContent = "Editar"; editar.addEventListener("click", () => abrir(u));
+          const statusBtn = document.createElement("button"); statusBtn.type = "button"; statusBtn.className = `btn btn-sm ${u.ativo === 0 ? "btn-outline-success" : "btn-outline-danger"}`; statusBtn.textContent = u.ativo === 0 ? "Ativar" : "Desativar";
+          statusBtn.addEventListener("click", async () => {
+            if (!confirm(`${u.ativo === 0 ? "Ativar" : "Desativar"} a conta de ${u.nome}?`)) return;
+            try { await api(`/usuarios/${u.id}`, { method: "PATCH", body: JSON.stringify({ ativo: u.ativo === 0 ? 1 : 0 }) }); await carregar(); }
+            catch (e) { mostrarErro(e.message); }
+          });
+          acoes.append(editar, statusBtn);
+          if (ehLider && u.papel === "admin") {
+            const transferir = document.createElement("button"); transferir.type = "button"; transferir.className = "btn btn-sm btn-outline-warning ms-1"; transferir.textContent = "Tornar líder";
+            transferir.addEventListener("click", async () => {
+              if (!confirm(`Transferir a liderança para ${u.nome}? Você deixará de ser o Administrador Líder.`)) return;
+              try {
+                await api("/admin/transferir-lideranca", { method: "POST", body: JSON.stringify({ usuario_id: u.id }) });
+                alert("Liderança transferida. A página será atualizada.");
+                location.reload();
+              } catch (e) { mostrarErro(e.message); }
+            });
+            const remover = document.createElement("button"); remover.type = "button"; remover.className = "btn btn-sm btn-outline-danger ms-1"; remover.textContent = "Remover acesso";
+            remover.addEventListener("click", async () => {
+              if (!confirm(`Remover o acesso administrativo de ${u.nome}? O histórico será preservado.`)) return;
+              try { await api(`/usuarios/${u.id}`, { method: "DELETE" }); await carregar(); }
+              catch (e) { mostrarErro(e.message); }
+            });
+            acoes.append(transferir, remover);
+          }
+        }
+        tr.append(acoes); tabela.append(tr);
       }
       const vazio = document.getElementById("usuariosVazio"); if (vazio) vazio.style.display = filtrados.length ? "none" : "block";
     }
@@ -359,7 +399,7 @@
         if (aviso) aviso.hidden = false;
       }
       await carregarFoto();
-      if (perfilAtual.papel === "admin") ligarGerenciamentoUsuarios();
+      if (perfilAtual.papel === "admin") ligarGerenciamentoUsuarios(perfilAtual);
     } catch (e) { console.warn("Perfil não carregado:", e.message); }
 
     const form = document.getElementById("perfilForm");
