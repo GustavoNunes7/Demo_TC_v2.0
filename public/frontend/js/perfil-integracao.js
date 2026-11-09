@@ -341,7 +341,7 @@
     try {
       perfilAtual = await api("/perfil");
       const valores = [
-        ["nome", perfilAtual.nome], ["email", perfilAtual.email],
+        ["nome", perfilAtual.nome], ["email", perfilAtual.email], ["matricula", perfilAtual.turma],
         ["dataNascimento", perfilAtual.data_nascimento], ["cpf", perfilAtual.cpf],
         ["telefone", perfilAtual.telefone], ["genero", perfilAtual.genero],
         ["observacao", perfilAtual.observacao]
@@ -351,7 +351,7 @@
         if (el) el.value = value || "";
       }
       if (perfilAtual.papel === "aluno") {
-        ["nome", "email", "dataNascimento", "cpf"].forEach(id => {
+        ["nome", "email", "matricula", "dataNascimento", "cpf"].forEach(id => {
           const el = document.getElementById(id);
           if (el) { el.readOnly = true; el.setAttribute("aria-readonly", "true"); }
         });
