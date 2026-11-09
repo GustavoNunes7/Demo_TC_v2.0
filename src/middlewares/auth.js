@@ -7,7 +7,7 @@ function autenticar(req, res, next) {
   try {
     req.usuario = jwt.verify(match[1], process.env.JWT_SECRET, { algorithms: ["HS256"] });
     const usuario = db.prepare("SELECT id, papel, ativo, admin_lider, token_versao FROM usuarios WHERE id=?").get(req.usuario.id);
-    if (!usuario || usuario.ativo === 0 || usuario.papel !== req.usuario.papel || (req.usuario.versao !== undefined && req.usuario.versao !== usuario.token_versao)) {
+    if (!usuario || usuario.ativo === 0 || usuario.papel !== req.usuario.papel || Number(req.usuario.versao ?? -1) !== usuario.token_versao) {
       return res.status(401).json({ erro: "Conta indisponível. Entre novamente ou contate a administração." });
     }
     req.usuario.admin_lider = usuario.admin_lider === 1;
