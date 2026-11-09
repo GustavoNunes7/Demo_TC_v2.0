@@ -302,6 +302,11 @@ r.patch("/usuarios/:id", autenticar, admin, wrap(async (req, res) => {
   const id = positiveId(req.params.id), u = get("usuarios", id);
   if (!u) return res.sendStatus(404);
   if (u.admin_lider === 1) return res.status(403).json({ erro: "O cadastro do Administrador Líder não pode ser alterado pela gestão de usuários." });
+  if (u.papel === "admin" && u.id !== req.usuario.id && req.usuario.admin_lider === true) {
+    const campos = Object.keys(req.body || {});
+    if (campos.length !== 1 || campos[0] !== "ativo")
+      return res.status(403).json({ erro: "A liderança pode apenas ativar ou desativar outro administrador. Cada administrador edita o próprio perfil." });
+  }
   if (u.papel === "admin" && req.usuario.admin_lider !== true) return res.status(403).json({ erro: "Somente o Administrador Líder pode editar outro administrador." });
   const nome = req.body.nome === undefined ? u.nome : clean(req.body.nome, 100);
   const email = req.body.email === undefined ? u.email : clean(req.body.email, 254).toLowerCase();
