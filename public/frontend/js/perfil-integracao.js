@@ -287,15 +287,16 @@
             })
             .catch(() => {});
         }
-        for (const valor of [u.nome, u.matricula || "—", u.email, u.admin_lider ? "Administrador Líder" : u.papel === "admin" ? "Administrador" : "Aluno", u.ativo === 0 ? "Inativo" : "Ativo"]) {
+        for (const valor of [u.nome, u.matricula || "—", u.email, String(u.email || "").toLowerCase() === "admin@techcampus.com" ? "Líder Principal" : u.admin_lider ? "Sub-líder" : u.papel === "admin" ? "Administrador" : "Aluno", u.ativo === 0 ? "Inativo" : "Ativo"]) {
           const td = document.createElement("td"); td.textContent = valor || "—"; tr.append(td);
         }
         const acoes = document.createElement("td");
         acoes.className = "text-end";
-        if (u.admin_lider) {
+        const ehPrincipal = String(u.email || "").toLowerCase() === "admin@techcampus.com";
+        if (ehPrincipal) {
           const liderTag = document.createElement("span");
           liderTag.className = "badge text-bg-warning";
-          liderTag.textContent = "Líder atual";
+          liderTag.textContent = "Líder Principal";
           acoes.append(liderTag);
         } else if (u.papel === "admin" && !ehLider) {
           acoes.textContent = "Protegido";
@@ -335,14 +336,24 @@
 
           if (ehLider && u.papel === "admin" && u.ativo !== 0) {
             menu.append(Object.assign(document.createElement("div"), { className: "dropdown-divider" }));
-            acaoMenu("Promover a Administrador Líder", "text-warning", async () => {
-              if (!confirm(`Promover ${u.nome} a Administrador Líder? Você continuará sendo Líder também.`)) return;
+            if (!u.admin_lider)             acaoMenu("Promover a Administrador Líder", "text-warning", async () => {
+              if (!confirm(`Promover ${u.nome} a Sub-líder? A conta admin@techcampus.com continuará como Líder Principal.`)) return;
               try {
                 await api("/admin/promover-lider", { method: "POST", body: JSON.stringify({ usuario_id: u.id }) });
-                mostrarSucesso(`${u.nome} agora também é Administrador Líder.`);
+                mostrarSucesso(`${u.nome} agora é Sub-líder.`);
                 await carregar();
               } catch (e) { mostrarErro(e.message); }
             });
+            if (u.admin_lider) {
+              acaoMenu("Remover sub-liderança", "text-warning", async () => {
+                if (!confirm(`Remover ${u.nome} da função de Sub-líder? A conta continuará como administradora.`)) return;
+                try {
+                  await api("/admin/remover-sublider", { method: "POST", body: JSON.stringify({ usuario_id: u.id }) });
+                  mostrarSucesso(`${u.nome} agora é administrador normal.`);
+                  await carregar();
+                } catch (e) { mostrarErro(e.message); }
+              });
+            }
             acaoMenu("Remover acesso administrativo", "text-danger", async () => {
               if (!confirm(`Remover o acesso administrativo de ${u.nome}? O histórico será preservado.`)) return;
               try { await api(`/usuarios/${u.id}`, { method: "DELETE" }); await carregar(); }
