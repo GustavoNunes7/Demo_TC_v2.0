@@ -120,6 +120,8 @@ if (!colunasUsuarios.includes("admin_lider")) db.exec("ALTER TABLE usuarios ADD 
 if (!colunasUsuarios.includes("token_versao")) db.exec("ALTER TABLE usuarios ADD COLUMN token_versao INTEGER NOT NULL DEFAULT 0");
 db.exec("DROP INDEX IF EXISTS idx_usuarios_admin_lider_unico");
 db.exec("CREATE INDEX IF NOT EXISTS idx_usuarios_admin_lider ON usuarios(admin_lider) WHERE admin_lider=1");
+// A conta institucional é a única liderança principal.
+db.prepare("UPDATE usuarios SET papel='admin', admin_lider=1 WHERE lower(email)='admin@techcampus.com'").run();
 db.exec(`
 CREATE TABLE IF NOT EXISTS movimentacoes_estoque (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
