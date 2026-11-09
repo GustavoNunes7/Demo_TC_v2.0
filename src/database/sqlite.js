@@ -109,6 +109,7 @@ if (!colunasPagamento.includes("expira_em")) db.exec("ALTER TABLE pagamentos ADD
 if (!colunasPagamento.includes("tipo_cartao")) db.exec("ALTER TABLE pagamentos ADD COLUMN tipo_cartao TEXT");
 if (!colunasPagamento.includes("valor_entregue_centavos")) db.exec("ALTER TABLE pagamentos ADD COLUMN valor_entregue_centavos INTEGER");
 if (!colunasPagamento.includes("troco_centavos")) db.exec("ALTER TABLE pagamentos ADD COLUMN troco_centavos INTEGER");
+if (!colunasPagamento.includes("parcelas")) db.exec("ALTER TABLE pagamentos ADD COLUMN parcelas INTEGER NOT NULL DEFAULT 1 CHECK(parcelas BETWEEN 1 AND 8)");
 
 // Migrações compatíveis com bancos existentes da versão original.
 // Exclusão lógica de produtos: separa remover da loja de ativar/desativar e preserva pedidos antigos.
