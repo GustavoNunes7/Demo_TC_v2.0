@@ -6,6 +6,7 @@ const publicUser = (u) =>
     email: u.email,
     papel: u.papel,
     turma: u.turma,
+    matricula: u.matricula || "",
     telefone: u.telefone,
     cpf: u.cpf || "",
     data_nascimento: u.data_nascimento || "",
