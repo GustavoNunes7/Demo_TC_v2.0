@@ -7,6 +7,12 @@ const publicUser = (u) =>
     papel: u.papel,
     turma: u.turma,
     telefone: u.telefone,
+    cpf: u.cpf || "",
+    data_nascimento: u.data_nascimento || "",
+    genero: u.genero || "",
+    observacao: u.observacao || "",
+    ativo: u.ativo,
+    foto_url: u.foto_url || null,
     criado_em: u.criado_em,
   };
 const validEmail = (email) =>
