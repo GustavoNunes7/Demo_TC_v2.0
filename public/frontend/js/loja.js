@@ -116,6 +116,7 @@
   let estadoPagamento = {
     metodo: "pix", // pix, dinheiro, cartao
     tipoCartao: null, // debito, credito (para cartao)
+    parcelas: 1,
     valorEntregue: 0, // para dinheiro (em centavos)
   };
 
@@ -873,6 +874,9 @@
           value: "debito",
           onchange: () => {
             estadoPagamento.tipoCartao = "debito";
+            estadoPagamento.parcelas = 1;
+            const select = $("caParcelas");
+            if (select) select.hidden = true;
           },
         }),
         h(
@@ -892,6 +896,19 @@
           value: "credito",
           onchange: () => {
             estadoPagamento.tipoCartao = "credito";
+            estadoPagamento.parcelas = 1;
+            const select = $("caParcelas");
+            if (select) {
+              const total = totalCarrinho();
+              const max = total > 100000 ? 8 : total > 50000 ? 5 : total > 10000 ? 4 : total > 7500 ? 3 : 1;
+              select.replaceChildren(...Array.from({length:max}, (_,i) => {
+                const option = document.createElement("option");
+                option.value = String(i+1);
+                option.textContent = i === 0 ? "À vista (1x)" : `${i+1} parcelas`;
+                return option;
+              }));
+              select.hidden = false;
+            }
           },
         }),
         h(
@@ -900,7 +917,14 @@
           "Crédito"
         )
       ),
-      h("small", { class: "text-white-50 d-block mt-2" }, "Escolha uma opção antes de finalizar")
+      h("label", { class: "form-label small mt-3", for: "caParcelas" }, "Parcelas no crédito"),
+      h("select", {
+        id: "caParcelas",
+        class: "form-select bg-dark text-white border-secondary",
+        hidden: true,
+        onchange: (e) => { estadoPagamento.parcelas = Number(e.target.value) || 1; },
+      }),
+      h("small", { class: "text-white-50 d-block mt-2" }, "Crédito: acima de R$ 75 em até 3x, acima de R$ 100 em até 4x, acima de R$ 500 em até 5x e acima de R$ 1.000 em até 8x.")
     );
 
     container.replaceChildren(opcoesPix, opcoesDinheiro, opcoesCartao, secDinheiro, secCartao);
@@ -909,6 +933,7 @@
   function selecionarPagamento(metodo) {
     estadoPagamento.metodo = metodo;
     estadoPagamento.tipoCartao = null;
+    estadoPagamento.parcelas = 1;
     estadoPagamento.valorEntregue = 0;
 
     const secDinheiro = $("caSecDinheiro");
@@ -1024,6 +1049,7 @@
         bodyPagamento.valor_entregue_centavos = estadoPagamento.valorEntregue;
       } else if (estadoPagamento.metodo === "cartao") {
         bodyPagamento.tipo_cartao = estadoPagamento.tipoCartao;
+        bodyPagamento.parcelas = estadoPagamento.tipoCartao === "credito" ? estadoPagamento.parcelas : 1;
       }
 
       estadoCompra.pagamento = await api(
@@ -1068,17 +1094,8 @@
     modalPagamento = new bootstrap.Modal($("modalPagamento"));
 
     $("modalPagamento").addEventListener("hidden.bs.modal", () => {
-      // Quando fecha sem pagar, cancela o pedido
-      if (estadoCompra.pedido && !estadoCompra.pago) {
-        try {
-          api(`/pedidos/${estadoCompra.pedido.id}/cancelar`, {
-            method: "POST",
-          });
-        } catch {
-          /* já tratado */
-        }
-        carregarProdutos();
-      }
+      // Fechar a janela não cancela a reserva: dinheiro/cartão aguardam o Admin
+      // e o PIX permanece aguardando a simulação. Cancelamento é ação explícita.
       resetEstadoCompra();
     });
   }
@@ -1126,27 +1143,21 @@
     }
 
     const rodape = $("pagRodape");
-    rodape.replaceChildren(
-      h(
-        "button",
-        {
-          class: "btn btn-outline-secondary",
-          type: "button",
-          onclick: cancelarCompra,
-        },
-        "Cancelar"
-      ),
-      h(
-        "button",
-        {
-          class: "btn btn-danger",
-          type: "button",
-          id: "pagSimular",
-          onclick: simularPagamento,
-        },
-        "Simular pagamento (modo teste)"
-      )
-    );
+    const botoes = [
+      h("button", { class: "btn btn-outline-secondary", type: "button", onclick: cancelarCompra }, "Cancelar pedido")
+    ];
+    if (estadoPagamento.metodo === "pix") {
+      botoes.push(h("button", {
+        class: "btn btn-success",
+        type: "button",
+        id: "pagSimular",
+        onclick: simularPagamento,
+      }, "Simular pagamento PIX"));
+    } else {
+      botoes.push(h("span", { class: "small text-secondary me-auto" },
+        "Aguardando confirmação presencial do administrador."));
+    }
+    rodape.replaceChildren(...botoes);
 
     modalPagamento.show();
   }
@@ -1235,11 +1246,11 @@
       { class: "bg-secondary-subtle p-4 rounded mb-4" },
       h("h6", { class: "text-white-50 small mb-3" }, "Forma de pagamento"),
       h("p", { class: "mb-0" }, h("strong", {}, `Cartão de ${tipo}`)),
-      h(
-        "p",
-        { class: "small text-white-50 mt-3 mb-0" },
-        "O pagamento será processado com segurança. Você não será solicitado a digitar dados sensíveis nesta tela."
-      )
+      ...(estadoPagamento.tipoCartao === "credito"
+        ? [h("p", { class: "mt-2 mb-0" }, h("strong", {}, `${estadoPagamento.parcelas}x no crédito`))]
+        : []),
+      h("p", { class: "small text-white-50 mt-3 mb-0" },
+        "Apresente este pedido ao responsável da AAPM. O token será gerado após a confirmação presencial.")
     );
 
     container.append(bloco);
@@ -2234,6 +2245,17 @@
     }
   }
 
+  async function confirmarPagamentoPresencial(id) {
+    if (!confirm(`Confirmar o recebimento presencial do pedido #${id}?`)) return;
+    try {
+      await api(`/admin/pagamentos/${id}/confirmar-presencial`, { method: "POST" });
+      setMsg($("gMsg"), `Pagamento do pedido #${id} confirmado. Token gerado.`, "success");
+      await carregarPedidosAdmin();
+    } catch (e) {
+      setMsg($("gMsg"), e.message);
+    }
+  }
+
   async function mudarStatus(id, status) {
     if (
       status === "rejeitado" &&
@@ -2308,13 +2330,12 @@
               ),
               h("td", {}, dataBR(p.criado_em)),
               h("td", {}, brl(p.total_centavos)),
-              h(
-                "td",
-                {},
-                p.pagamento_status
-                  ? badge(PAG[p.pagamento_status], COR[p.pagamento_status])
-                  : badge("Sem pagamento", "secondary")
-              ),
+              h("td", {}, h("div", { class: "tc-admin-payment" },
+                h("strong", {}, p.pagamento_metodo === "pix" ? "PIX" : p.pagamento_metodo === "dinheiro" ? "Dinheiro" : p.pagamento_metodo === "cartao" ? `Cartão · ${p.tipo_cartao === "credito" ? "Crédito" : "Débito"}` : "Forma não informada"),
+                p.pagamento_metodo === "dinheiro" && h("small", {}, `Entregue: ${brl(p.valor_entregue_centavos)} · Troco: ${brl(p.troco_centavos)}`),
+                p.pagamento_metodo === "cartao" && p.tipo_cartao === "credito" && h("small", {}, `${p.parcelas || 1}x no crédito`),
+                p.pagamento_status ? badge(PAG[p.pagamento_status], COR[p.pagamento_status]) : badge("Sem pagamento", "secondary")
+              )),
               h("td", {}, badge(STATUS[p.status] || p.status, COR[p.status])),
               h(
                 "td",
@@ -2329,29 +2350,18 @@
                   "Itens"
                 ),
                 p.status === "pendente" && [
-                  p.pagamento_metodo !== "pix" ? h(
-                    "button",
-                    {
-                      class: "btn btn-sm btn-success me-1",
-                      type: "button",
-                      disabled: p.pagamento_status !== "confirmado",
-                      title:
-                        p.pagamento_status !== "confirmado"
-                          ? "Aguardando pagamento"
-                          : "",
-                      onclick: () => mudarStatus(p.id, "aprovado"),
-                    },
-                    "Aprovar"
-                  ) : null,
-                  h(
-                    "button",
-                    {
-                      class: "btn btn-sm btn-outline-danger",
-                      type: "button",
-                      onclick: () => mudarStatus(p.id, "rejeitado"),
-                    },
-                    "Rejeitar"
-                  ),
+                  ["dinheiro", "cartao"].includes(p.pagamento_metodo) && p.pagamento_status === "pendente"
+                    ? h("button", {
+                        class: "btn btn-sm btn-success me-1",
+                        type: "button",
+                        onclick: () => confirmarPagamentoPresencial(p.pagamento_id),
+                      }, "Confirmar recebimento")
+                    : null,
+                  h("button", {
+                    class: "btn btn-sm btn-outline-danger",
+                    type: "button",
+                    onclick: () => mudarStatus(p.id, "rejeitado"),
+                  }, "Rejeitar"),
                 ],
                 p.status === "aprovado"
                   ? h(
