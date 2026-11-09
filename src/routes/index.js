@@ -118,29 +118,48 @@ r.post(
     if (!u || u.ativo === 0 || !(await bcrypt.compare(senha, u.senha_hash)))
       return res.status(401).json({ erro: "Credenciais inválidas." });
     const token = jwt.sign(
-      { id: u.id, papel: u.papel },
+      { id: u.id, papel: u.papel, versao: u.token_versao || 0 },
       process.env.JWT_SECRET,
       { expiresIn: "8h", algorithm: "HS256" },
     );
     res.json({ token, usuario: publicUser(u) });
   }),
 );
-r.post("/auth/recuperar", loginLimit, (req, res) => {
-  const email = clean(req.body.email, 254).toLowerCase(),
-    u = db.prepare("SELECT id FROM usuarios WHERE email=?").get(email);
-  if (u) {
-    const token = crypto.randomBytes(32).toString("hex"),
-      hash = crypto.createHash("sha256").update(token).digest("hex");
-    db.prepare(
-      "INSERT INTO recuperacoes(usuario_id,token_hash,expira_em) VALUES(?,?,?)",
-    ).run(u.id, hash, Date.now() + 15 * 60 * 1000);
-    // Integre um provedor de e-mail para enviar o token; nunca exponha o token na API ou nos logs.
+r.post("/auth/recuperar", loginLimit, wrap(async (req, res) => {
+  const email = clean(req.body.email, 254).toLowerCase();
+  if (!validEmail(email)) return bad(res, "Informe um e-mail válido.");
+  const apiKey = process.env.RESEND_API_KEY;
+  const remetente = process.env.EMAIL_FROM;
+  const appUrl = process.env.APP_URL;
+  if (!apiKey || !remetente || !appUrl) return res.status(503).json({ erro: "A recuperação por e-mail ainda não está configurada. Procure a administração da AAPM." });
+  const usuario = db.prepare("SELECT id,nome,email FROM usuarios WHERE email=? AND ativo=1").get(email);
+  if (usuario) {
+    const token = crypto.randomBytes(32).toString("hex");
+    const hash = crypto.createHash("sha256").update(token).digest("hex");
+    const baseUrl = new URL(appUrl);
+    if (!["http:", "https:"].includes(baseUrl.protocol)) return res.status(500).json({ erro: "Endereço do sistema inválido na configuração." });
+    const link = new URL("/frontend/login.html", baseUrl);
+    link.searchParams.set("token", token);
+    db.prepare("UPDATE recuperacoes SET usado=1 WHERE usuario_id=? AND usado=0").run(usuario.id);
+    db.prepare("INSERT INTO recuperacoes(usuario_id,token_hash,expira_em) VALUES(?,?,?)").run(usuario.id, hash, Date.now() + 15 * 60 * 1000);
+    const nomeSeguro = String(usuario.nome).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    const envio = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: remetente, to: [usuario.email], subject: "Recuperação de senha - TechCampus",
+        text: `Olá, ${usuario.nome}. Recebemos uma solicitação para redefinir sua senha do TechCampus. Acesse este link em até 15 minutos: ${link.href}. Se não foi você, ignore esta mensagem.`,
+        html: `<p>Olá, ${nomeSeguro}.</p><p>Recebemos uma solicitação para redefinir sua senha do TechCampus.</p><p><a href="${link.href}">Criar uma nova senha</a></p><p>Este link expira em 15 minutos. Se não foi você, ignore esta mensagem.</p>`
+      })
+    });
+    if (!envio.ok) {
+      db.prepare("UPDATE recuperacoes SET usado=1 WHERE token_hash=?").run(hash);
+      console.error("Falha ao enviar e-mail de recuperação. Verifique a configuração do provedor.");
+      return res.status(502).json({ erro: "Não foi possível enviar o e-mail de recuperação. Verifique a configuração do serviço." });
+    }
   }
-  res.json({
-    mensagem:
-      "Se o e-mail estiver cadastrado, você receberá instruções de recuperação quando o serviço de e-mail estiver configurado.",
-  });
-});
+  res.json({ mensagem: "Se o e-mail estiver cadastrado, você receberá um link de recuperação válido por 15 minutos." });
+}));
 r.post(
   "/auth/redefinir",
   loginLimit,
@@ -165,7 +184,7 @@ r.post(
       return res.status(400).json({ erro: "Token inválido ou expirado." });
     const senhaHash = await bcrypt.hash(senha, 12);
     db.transaction(() => {
-      db.prepare("UPDATE usuarios SET senha_hash=? WHERE id=?").run(
+      db.prepare("UPDATE usuarios SET senha_hash=?, token_versao=token_versao+1 WHERE id=?").run(
         senhaHash,
         rec.usuario_id,
       );
@@ -223,12 +242,16 @@ r.delete("/perfil", autenticar, wrap(async (req, res) => {
   const senha = req.body?.senha;
   const u = get("usuarios", req.usuario.id);
   if (!u || u.ativo === 0) return res.sendStatus(404);
+  if (u.papel !== "aluno") return res.status(403).json({ erro: "Somente alunos podem encerrar a própria conta por esta opção." });
   if (u.admin_lider === 1) return res.status(403).json({ erro: "Transfira a liderança para outro administrador antes de encerrar esta conta." });
   if (typeof senha !== "string" || !(await bcrypt.compare(senha, u.senha_hash)))
     return res.status(401).json({ erro: "Confirme sua senha para encerrar a conta." });
-  db.prepare("UPDATE usuarios SET ativo=0,email=?,nome=?,telefone=NULL,foto_url=NULL WHERE id=?")
-    .run(`encerrada+${u.id}+${Date.now()}@conta.invalid`, `Conta encerrada #${u.id}`, u.id);
-  notificarAdmins("Encerramento de conta", `A conta de usuário #${u.id} solicitou encerramento.`);
+  db.transaction(() => {
+    db.prepare("UPDATE recuperacoes SET usado=1 WHERE usuario_id=?").run(u.id);
+    db.prepare("UPDATE usuarios SET ativo=0,token_versao=token_versao+1,email=?,nome=?,telefone=NULL,foto_url=NULL,cpf=NULL,data_nascimento=NULL,genero=NULL,observacao=NULL,matricula=NULL,turma=NULL WHERE id=?")
+      .run(`encerrada+${u.id}+${Date.now()}@conta.invalid`, `Conta encerrada #${u.id}`, u.id);
+  })();
+  notificarAdmins("Encerramento de conta", `A conta de usuário #${u.id} solicitou encerramento. O histórico de pedidos e pagamentos foi preservado.`);
   res.json({ ok: true, mensagem: "Conta encerrada. Sua sessão será finalizada." });
 }));
 
