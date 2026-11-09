@@ -117,6 +117,7 @@ if (!colunasUsuarios.includes("data_nascimento")) db.exec("ALTER TABLE usuarios 
 if (!colunasUsuarios.includes("genero")) db.exec("ALTER TABLE usuarios ADD COLUMN genero TEXT");
 if (!colunasUsuarios.includes("observacao")) db.exec("ALTER TABLE usuarios ADD COLUMN observacao TEXT");
 if (!colunasUsuarios.includes("admin_lider")) db.exec("ALTER TABLE usuarios ADD COLUMN admin_lider INTEGER NOT NULL DEFAULT 0 CHECK(admin_lider IN (0,1))");
+if (!colunasUsuarios.includes("token_versao")) db.exec("ALTER TABLE usuarios ADD COLUMN token_versao INTEGER NOT NULL DEFAULT 0");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_admin_lider_unico ON usuarios(admin_lider) WHERE admin_lider=1");
 
 const colunasPedidos = db.prepare("PRAGMA table_info(pedidos)").all().map((c) => c.name);
