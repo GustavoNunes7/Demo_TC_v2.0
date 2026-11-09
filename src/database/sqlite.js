@@ -103,14 +103,6 @@ if (!pagamentosSql.includes("'dinheiro'")) {
   `);
 }
 
-// Metadados do pagamento: prazo PIX, modalidade do cartão e troco informado.
-const colunasPagamento = db.prepare("PRAGMA table_info(pagamentos)").all().map((c) => c.name);
-if (!colunasPagamento.includes("expira_em")) db.exec("ALTER TABLE pagamentos ADD COLUMN expira_em INTEGER");
-if (!colunasPagamento.includes("tipo_cartao")) db.exec("ALTER TABLE pagamentos ADD COLUMN tipo_cartao TEXT");
-if (!colunasPagamento.includes("valor_entregue_centavos")) db.exec("ALTER TABLE pagamentos ADD COLUMN valor_entregue_centavos INTEGER");
-if (!colunasPagamento.includes("troco_centavos")) db.exec("ALTER TABLE pagamentos ADD COLUMN troco_centavos INTEGER");
-if (!colunasPagamento.includes("parcelas")) db.exec("ALTER TABLE pagamentos ADD COLUMN parcelas INTEGER NOT NULL DEFAULT 1 CHECK(parcelas BETWEEN 1 AND 8)");
-
 // Migrações compatíveis com bancos existentes da versão original.
 // Exclusão lógica de produtos: separa remover da loja de ativar/desativar e preserva pedidos antigos.
 const colunasProdutos = db.prepare("PRAGMA table_info(produtos)").all().map((c) => c.name);

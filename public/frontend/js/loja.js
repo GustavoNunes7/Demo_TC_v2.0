@@ -116,7 +116,6 @@
   let estadoPagamento = {
     metodo: "pix", // pix, dinheiro, cartao
     tipoCartao: null, // debito, credito (para cartao)
-    parcelas: 1,
     valorEntregue: 0, // para dinheiro (em centavos)
   };
 
@@ -873,7 +872,7 @@
           id: "caDebito",
           value: "debito",
           onchange: () => {
-            estadoPagamento.tipoCartao = "debito"; atualizarOpcoesParcelamento();
+            estadoPagamento.tipoCartao = "debito";
           },
         }),
         h(
@@ -892,7 +891,7 @@
           id: "caCredito",
           value: "credito",
           onchange: () => {
-            estadoPagamento.tipoCartao = "credito"; atualizarOpcoesParcelamento();
+            estadoPagamento.tipoCartao = "credito";
           },
         }),
         h(
@@ -901,11 +900,7 @@
           "Crédito"
         )
       ),
-      h("div", { id: "caSecParcelas", class: "mt-3", hidden: true },
-        h("label", { class: "form-label small", for: "caParcelas" }, "Parcelamento no crédito"),
-        h("select", { id: "caParcelas", class: "form-select bg-dark text-white border-secondary", onchange: () => { estadoPagamento.parcelas = Number($("caParcelas").value || 1); } })
-      ),
-      h("small", { class: "text-white-50 d-block mt-2" }, "Parcelamento disponível somente no crédito.")
+      h("small", { class: "text-white-50 d-block mt-2" }, "Escolha uma opção antes de finalizar")
     );
 
     container.replaceChildren(opcoesPix, opcoesDinheiro, opcoesCartao, secDinheiro, secCartao);
@@ -934,18 +929,6 @@
       if (debito) debito.checked = false;
       if (credito) credito.checked = false;
     }
-    atualizarOpcoesParcelamento();
-  }
-
-  function maxParcelasCredito(total) {
-    if(total>100000)return 8; if(total>50000)return 5; if(total>10000)return 4; if(total>7500)return 3; return 1;
-  }
-  function atualizarOpcoesParcelamento() {
-    const area=$("caSecParcelas"),select=$("caParcelas"); if(!area||!select)return;
-    const credito=estadoPagamento.metodo==="cartao"&&estadoPagamento.tipoCartao==="credito";
-    const max=credito?maxParcelasCredito(totalCarrinho()):1; area.hidden=!credito||max<=1; select.replaceChildren();
-    for(let n=1;n<=max;n++)select.append(h("option",{value:String(n)},n+"x de até "+brl(Math.ceil(totalCarrinho()/n))));
-    estadoPagamento.parcelas=Math.min(estadoPagamento.parcelas||1,max);select.value=String(estadoPagamento.parcelas);
   }
 
   function calcularTroco() {
@@ -1041,7 +1024,6 @@
         bodyPagamento.valor_entregue_centavos = estadoPagamento.valorEntregue;
       } else if (estadoPagamento.metodo === "cartao") {
         bodyPagamento.tipo_cartao = estadoPagamento.tipoCartao;
-        bodyPagamento.parcelas = estadoPagamento.tipoCartao === "credito" ? estadoPagamento.parcelas : 1;
       }
 
       estadoCompra.pagamento = await api(
@@ -1086,8 +1068,17 @@
     modalPagamento = new bootstrap.Modal($("modalPagamento"));
 
     $("modalPagamento").addEventListener("hidden.bs.modal", () => {
-      // Fechar a janela não cancela pedidos: dinheiro/cartão continuam aguardando o Admin,
-      // e o PIX continua aguardando a simulação de pagamento.
+      // Quando fecha sem pagar, cancela o pedido
+      if (estadoCompra.pedido && !estadoCompra.pago) {
+        try {
+          api(`/pedidos/${estadoCompra.pedido.id}/cancelar`, {
+            method: "POST",
+          });
+        } catch {
+          /* já tratado */
+        }
+        carregarProdutos();
+      }
       resetEstadoCompra();
     });
   }
@@ -1145,10 +1136,16 @@
         },
         "Cancelar"
       ),
-      estadoPagamento.metodo === "pix" ? h(
-        "button", { class: "btn btn-danger", type: "button", id: "pagSimular", onclick: simularPagamento },
-        "Simular confirmação PIX (teste)"
-      ) : h("span", { class: "small text-white-50 me-auto" }, "Aguardando confirmação presencial pelo responsável.")
+      h(
+        "button",
+        {
+          class: "btn btn-danger",
+          type: "button",
+          id: "pagSimular",
+          onclick: simularPagamento,
+        },
+        "Simular pagamento (modo teste)"
+      )
     );
 
     modalPagamento.show();
@@ -1184,11 +1181,7 @@
       h(
         "p",
         { class: "small text-white-50 mb-0" },
-        "Esta é uma demonstração: clique em “Simular confirmação PIX” para marcar como pago, aprovar o pedido e gerar seu token automaticamente."
-      ),
-      h("div", { class: "alert alert-warning mt-3 mb-0 small" },
-        h("i", { class: "bi bi-clock me-2" }),
-        "Você tem 15 minutos para pagar. Fechar esta janela não cancela o pedido."
+        "Pague com seu banco ou aplicativo de PIX"
       )
     );
 
@@ -1204,7 +1197,7 @@
     const bloco = h(
       "div",
       { class: "bg-secondary-subtle p-4 rounded mb-4" },
-      h("p", { class: "text-white-50 small mb-3" }, "Leve o valor informado até um responsável da AAPM. O pedido só será aprovado depois que ele confirmar o recebimento:"),
+      h("p", { class: "text-white-50 small mb-3" }, "Confirme os valores com o responsável:"),
       h(
         "div",
         { class: "small mb-2 d-flex justify-content-between" },
@@ -1226,7 +1219,7 @@
       h(
         "p",
         { class: "small text-white-50 mt-3 mb-0" },
-        "Apresente o valor a um responsável da AAPM. O pedido ficará pendente até o administrador confirmar o recebimento; depois, o token será gerado."
+        "O pagamento será confirmado pelo responsável após a entrega do dinheiro."
       )
     );
 
@@ -1241,12 +1234,11 @@
       "div",
       { class: "bg-secondary-subtle p-4 rounded mb-4" },
       h("h6", { class: "text-white-50 small mb-3" }, "Forma de pagamento"),
-      h("p", { class: "mb-0" }, h("strong", {}, `Cartão de ${tipo}${tipo === "Crédito" && Number(pagamento.parcelas || 1) > 1 ? " · " + pagamento.parcelas + "x" : ""}`)),
-      tipo === "Crédito" && Number(pagamento.parcelas || 1) > 1 ? h("p", { class: "small text-info mb-0 mt-2" }, `${pagamento.parcelas} parcelas sem juros`) : null,
+      h("p", { class: "mb-0" }, h("strong", {}, `Cartão de ${tipo}`)),
       h(
         "p",
         { class: "small text-white-50 mt-3 mb-0" },
-        "Apresente este pedido a um responsável da AAPM. Ele ficará pendente até o administrador confirmar o recebimento presencial; depois, o token será gerado."
+        "O pagamento será processado com segurança. Você não será solicitado a digitar dados sensíveis nesta tela."
       )
     );
 
@@ -1534,29 +1526,6 @@
               color:var(--fin-text)!important;min-width:0
             }
             #gFinanceiro .tc-fin-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px}
-            /* Contraste reforçado: evita textos azul-acinzentados quase invisíveis no tema escuro */
-            #gFinanceiro .tc-pie-item,#gFinanceiro .tc-pie-item strong,
-            #gFinanceiro .tc-pie-item-name span,#gFinanceiro .tc-fin-list-row,
-            #gFinanceiro .tc-fin-list-row span,#gFinanceiro .tc-fin-list-row strong,
-            #gFinanceiro .tc-fin-list-row .small,#gFinanceiro .tc-panel-note,
-            #gFinanceiro .tc-kpi-label,#gFinanceiro .tc-kpi-note,
-            #gFinanceiro .tc-stock-stat span,#gFinanceiro label,
-            #gFinanceiro .tc-fin-table td{color:var(--fin-text)!important}
-            #gFinanceiro .tc-panel-note,#gFinanceiro .tc-kpi-note,
-            #gFinanceiro .tc-stock-stat span{color:var(--fin-muted)!important}
-            #gFinanceiro .tc-pie-item strong,#gFinanceiro .tc-fin-list-row strong{font-weight:750}
-            #gFinanceiro .tc-pie-item-name span,#gFinanceiro .tc-fin-list-row .text-truncate{color:var(--fin-text)!important}
-            #gFinanceiro .tc-fin-alerts{display:grid;gap:9px}
-            #gFinanceiro .tc-alert{display:flex;align-items:flex-start;gap:11px;padding:13px 15px;border:1px solid var(--alert-border);border-left:4px solid var(--alert-accent);border-radius:11px;background:var(--alert-bg);color:var(--fin-text)}
-            #gFinanceiro .tc-alert-icon{font-size:1.05rem;line-height:1.35;color:var(--alert-accent);flex:0 0 auto}
-            #gFinanceiro .tc-alert strong{display:block;color:var(--fin-text)!important;font-size:.87rem}
-            #gFinanceiro .tc-alert p{margin:3px 0 0;color:var(--fin-muted)!important;font-size:.79rem;line-height:1.45}
-            #gFinanceiro .tc-alert-warning{--alert-bg:rgba(245,174,55,.10);--alert-border:rgba(245,174,55,.28);--alert-accent:#f0b43c}
-            #gFinanceiro .tc-alert-danger{--alert-bg:rgba(239,91,112,.10);--alert-border:rgba(239,91,112,.3);--alert-accent:#ff718c}
-            #gFinanceiro .tc-alert-info{--alert-bg:rgba(65,145,230,.10);--alert-border:rgba(65,145,230,.28);--alert-accent:#68a9ff}
-            #gFinanceiro .tc-stock-out{color:var(--fin-red)!important;font-weight:750}
-            #gFinanceiro .tc-stock-low{color:#f0b43c!important;font-weight:750}
-
             #gFinanceiro .tc-fin-head h3{font-size:1.45rem;letter-spacing:-.035em;color:var(--fin-text)!important}
             #gFinanceiro .tc-fin-sub,#gFinanceiro .tc-panel-note{color:var(--fin-muted)!important;font-size:.8rem}
             #gFinanceiro .tc-card{background:var(--fin-card)!important;color:var(--fin-text)!important;border:1px solid var(--fin-border)!important;border-radius:15px;padding:19px;height:100%;box-shadow:var(--fin-shadow);min-width:0}
@@ -1635,11 +1604,6 @@
             html[data-bs-theme="light"] #gFinanceiro .tc-fin-btn{background:#078d72;border-color:#078d72}
             html[data-bs-theme="light"] #gFinanceiro .tc-rank{background:#e6f7f2;color:#078d72}
             html[data-bs-theme="light"] #gFinanceiro .tc-progress{background:#edf2f6}
-            html[data-bs-theme="light"] #gFinanceiro .tc-alert-warning{--alert-bg:#fff8e8;--alert-border:#f3d99c;--alert-accent:#986400}
-            html[data-bs-theme="light"] #gFinanceiro .tc-alert-danger{--alert-bg:#fff0f1;--alert-border:#f1c0c5;--alert-accent:#b4233c}
-            html[data-bs-theme="light"] #gFinanceiro .tc-alert-info{--alert-bg:#eef6ff;--alert-border:#c5dcf7;--alert-accent:#245fa5}
-            html[data-bs-theme="light"] #gFinanceiro .tc-stock-out{color:#b4233c!important}
-            html[data-bs-theme="light"] #gFinanceiro .tc-stock-low{color:#986400!important}
           </style>  </style>
           <div class="tc-fin-head">
             <div><h3 class="fw-bold mb-1">Visão financeira</h3><div class="tc-fin-sub">Acompanhe receitas, despesas, vendas e movimentações do estoque.</div></div>
@@ -1649,7 +1613,6 @@
               <button type="button" class="btn tc-fin-btn px-3" id="gFinAtualizar"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button>
             </div>
           </div>
-          <div id="gFinAlertas" class="tc-fin-alerts mb-3" aria-live="polite"></div>
           <div class="row g-3 mb-3">
             <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#e2fbf4"><div class="tc-kpi-label"><i class="bi bi-graph-up-arrow me-1 text-success"></i>Receita confirmada</div><div class="tc-kpi-value text-success" id="gFinReceita">R$ 0,00</div><div class="tc-kpi-note">Pagamentos confirmados no mês</div></div></div>
             <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#fff0f0"><div class="tc-kpi-label"><i class="bi bi-arrow-down-right me-1 text-danger"></i>Despesas</div><div class="tc-kpi-value text-danger" id="gFinDespesas">R$ 0,00</div><div class="tc-kpi-note">Despesas registradas no mês</div></div></div>
@@ -1883,48 +1846,16 @@
         graf.append(coluna);
       }
       const estoque=dados.estoque||{};
-      const alertas=[];
-      const receita=Number(dados.receita_centavos||0),despesas=Number(dados.despesas_centavos||0);
-      const mesesGrafico=dados.grafico||[];
-      const mesAtual=mesesGrafico[mesesGrafico.length-1]||{};
-      const mesAnterior=mesesGrafico[mesesGrafico.length-2]||{};
-      if(receita===0&&despesas>0){
-        alertas.push({tipo:"danger",icone:"bi-cash-coin",titulo:"Nenhuma receita confirmada neste mês",texto:"Há custos registrados, mas ainda não existem pagamentos confirmados no período."});
-      }else if(Number(mesAnterior.receita||0)>0&&receita<Number(mesAnterior.receita)*.5){
-        alertas.push({tipo:"warning",icone:"bi-graph-down-arrow",titulo:"Receita abaixo do mês anterior",texto:"A renda confirmada caiu mais de 50% em relação ao mês anterior. Acompanhe as entradas."});
-      }
-      if(receita>0&&despesas/receita>=1){
-        alertas.push({tipo:"danger",icone:"bi-exclamation-triangle",titulo:"Custos acima da receita",texto:"As despesas já representam "+(despesas/receita*100).toLocaleString("pt-BR",{maximumFractionDigits:1})+"% da receita. O resultado do mês está negativo ou zerado."});
-      }else if(receita>0&&despesas/receita>=.7){
-        alertas.push({tipo:"warning",icone:"bi-exclamation-circle",titulo:"Atenção aos custos",texto:"As despesas consomem "+(despesas/receita*100).toLocaleString("pt-BR",{maximumFractionDigits:1})+"% da receita. Revise os gastos antes de assumir novos custos."});
-      }
-      const semEstoque=produtos.filter(p=>p.ativo!==false&&Number(p.estoque)<=0);
-      const estoqueBaixo=produtos.filter(p=>p.ativo!==false&&Number(p.estoque)>0&&Number(p.estoque)<=3);
-      if(semEstoque.length){
-        alertas.push({tipo:"danger",icone:"bi-box-seam",titulo:semEstoque.length+" produto(s) sem estoque",texto:"Reposição necessária: "+semEstoque.slice(0,5).map(p=>p.nome).join(", ")+(semEstoque.length>5?" e mais "+(semEstoque.length-5):"")+". Confira as compras para voltar a disponibilizá-los."});
-      }
-      if(estoqueBaixo.length){
-        alertas.push({tipo:"warning",icone:"bi-box2",titulo:estoqueBaixo.length+" produto(s) com estoque baixo",texto:"Estes produtos têm até 3 unidades: "+estoqueBaixo.slice(0,5).map(p=>p.nome+" ("+p.estoque+")").join(", ")+". Considere comprar mais."});
-      }
-      const areaAlertas=$("gFinAlertas");areaAlertas.replaceChildren();
-      if(!alertas.length){
-        areaAlertas.append(h("div",{class:"tc-alert tc-alert-info"},h("i",{class:"bi bi-check-circle tc-alert-icon"}),h("div",{},h("strong",{},"Tudo sob controle"),h("p",{},"Não há alertas financeiros ou de estoque para este período."))));
-      }else{
-        alertas.forEach(a=>areaAlertas.append(h("div",{class:"tc-alert tc-alert-"+a.tipo},h("i",{class:"bi "+a.icone+" tc-alert-icon"}),h("div",{},h("strong",{},a.titulo),h("p",{},a.texto)))));
-      }
       $("gFinUnidades").textContent=Number(estoque.unidades||0).toLocaleString("pt-BR");
       $("gFinEstoqueBaixo").textContent=Number(estoque.baixo||0).toLocaleString("pt-BR");
       $("gFinEstoqueProdutos").textContent=Number(estoque.produtos||0).toLocaleString("pt-BR");
       $("gFinEstoqueBaixoCard").textContent=Number(estoque.baixo||0).toLocaleString("pt-BR");
-      const baixo=produtos.filter(p=>p.ativo!==false&&Number(p.estoque)<=3);
+      const baixo=produtos.filter(p=>Number(p.estoque)<=3);
       const listaEstoque=$("gFinEstoqueLista");listaEstoque.replaceChildren();
-      if(!baixo.length) listaEstoque.append(h("div",{class:"text-success py-2"},"Todos os produtos estão acima do limite mínimo de estoque."));
-      baixo.slice(0,8).forEach(p=>{
-        const qtd=Number(p.estoque)||0;
+      if(!baixo.length) listaEstoque.append(h("div",{class:"text-success py-2"},"Todos os produtos estão com estoque acima do limite mínimo."));
+      baixo.slice(0,6).forEach(p=>{
         const linha=h("div",{class:"tc-fin-list-row"});
-        const nome=h("span",{class:"text-truncate",style:"min-width:0"},p.nome);
-        const status=h("strong",{class:"flex-shrink-0 "+(qtd<=0?"tc-stock-out":"tc-stock-low")},qtd<=0?"ESGOTADO":qtd+" un. · Repor");
-        linha.append(nome,status);
+        linha.append(h("span",{class:"text-truncate",style:"color:#34495a"},p.nome),h("strong",{class:"text-danger flex-shrink-0"},Number(p.estoque)+" un."));
         listaEstoque.append(linha);
       });
       const mais=$( "gFinMaisVendidos");mais.replaceChildren();
@@ -1974,16 +1905,16 @@
         fatias.forEach(f=>{
           const item=h("div",{class:"tc-pie-item"});
           const nome=h("span",{class:"tc-pie-item-name"});
-          nome.append(h("i",{class:"tc-pie-swatch",style:"background:"+cores[f.i]}),h("span",{class:"text-truncate"},f.p.nome));
-          item.append(nome,h("strong",{},f.percentual.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%"));
+          nome.append(h("i",{class:"tc-pie-swatch",style:"background:"+cores[f.i]}),h("span",{class:"text-truncate",style:"color:#536575"},f.p.nome));
+          item.append(nome,h("strong",{style:"color:#203447"},f.percentual.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%"));
           legenda.append(item);
         });
         pizza.append(donut,legenda);
         fatias.forEach((f)=>{
           const linha=h("div",{class:"tc-fin-list-row"});
           const esquerda=h("div",{class:"d-flex align-items-center gap-2 flex-grow-1",style:"min-width:0"});
-          esquerda.append(h("span",{class:"tc-rank"},String(f.i+1)),h("div",{class:"flex-grow-1",style:"min-width:0"},h("div",{class:"small fw-semibold text-truncate"},f.p.nome),h("div",{class:"tc-progress"},h("span",{style:"width:"+f.percentual+"%;background:"+cores[f.i]}))));
-          linha.append(esquerda,h("div",{class:"text-end flex-shrink-0"},h("strong",{class:"small"},Number(f.p.quantidade).toLocaleString("pt-BR")+" un."),h("div",{class:"tc-panel-note"},f.percentual.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%")));
+          esquerda.append(h("span",{class:"tc-rank"},String(f.i+1)),h("div",{class:"flex-grow-1",style:"min-width:0"},h("div",{class:"small fw-semibold text-truncate",style:"color:#34495a"},f.p.nome),h("div",{class:"tc-progress"},h("span",{style:"width:"+f.percentual+"%;background:"+cores[f.i]}))));
+          linha.append(esquerda,h("div",{class:"text-end flex-shrink-0"},h("strong",{class:"small",style:"color:#203447"},Number(f.p.quantidade).toLocaleString("pt-BR")+" un."),h("div",{class:"tc-panel-note"},f.percentual.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%")));
           mais.append(linha);
         });
       }
@@ -2359,56 +2290,100 @@
     }
   }
 
-  async function confirmarPagamentoPresencial(id) {
-    if (!confirm(`Confirmar que o pagamento presencial do pedido #${id} foi recebido? O pedido será aprovado e o token será gerado.`)) return;
-    try {
-      await api(`/admin/pagamentos/${id}/confirmar-presencial`, { method: "POST" });
-      setMsg($("gMsg"), `Pagamento do pedido #${id} confirmado. Pedido aprovado e token gerado.`, "success");
-      await carregarPedidosAdmin();
-    } catch (e) { setMsg($("gMsg"), e.message); }
-  }
-
   function renderPedidosAdmin(lista) {
-    const corpo = h("tbody", {}, lista.length ? lista.map((p) => {
-      const metodo = p.pagamento_metodo === "pix" ? (p.pagamento_status === "confirmado" ? "PIX · Pago" : "PIX") :
-        p.pagamento_metodo === "cartao" ? (p.tipo_cartao === "credito" ? "Cartão · Crédito" : p.tipo_cartao === "debito" ? "Cartão · Débito" : "Cartão") + (p.tipo_cartao === "credito" && Number(p.parcelas||1)>1 ? " · "+p.parcelas+"x" : "") :
-        p.pagamento_metodo === "dinheiro" ? "Dinheiro" : "Não informado";
-      const detalhes = [];
-      if (p.pagamento_metodo === "dinheiro" && p.valor_entregue_centavos != null) {
-        detalhes.push("Entregue: " + brl(p.valor_entregue_centavos));
-        detalhes.push("Troco: " + brl(p.troco_centavos || 0));
-      }
-      if (p.pagamento_metodo === "pix" && p.pagamento_status === "pendente" && p.pagamento_expira_em) {
-        detalhes.push("Aguardando pagamento · prazo até " + new Date(Number(p.pagamento_expira_em)).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
-      }
-      if (p.pagamento_metodo === "cartao" && p.tipo_cartao === "credito" && Number(p.parcelas||1)>1) detalhes.push(p.parcelas+" parcelas");
-      const pagamentoCell = h("div", {class:"tc-admin-payment"},
-        h("div",{class:"fw-semibold"},metodo),
-        h("div",{class:"small mt-1"},p.pagamento_status ? badge(PAG[p.pagamento_status] || p.pagamento_status,COR[p.pagamento_status] || "secondary") : badge("Sem pagamento","secondary")),
-        ...detalhes.map(x=>h("div",{class:"small text-secondary mt-1"},x))
-      );
-      const tr = h("tr",{},
-        h("td",{},"#"+p.id),
-        h("td",{},h("div",{},p.cliente),h("div",{class:"small text-secondary"},p.cliente_email)),
-        h("td",{},dataBR(p.criado_em)),
-        h("td",{},brl(p.total_centavos)),
-        h("td",{},pagamentoCell),
-        h("td",{},badge(STATUS[p.status]||p.status,COR[p.status])),
-        h("td",{class:"text-end"},h("div",{class:"d-flex justify-content-end align-items-center gap-1 flex-wrap"},
-          h("button",{class:"btn btn-sm btn-outline-secondary",type:"button",onclick:()=>alternarItens(tr,p.id)},"Itens"),
-          ...(p.status==="pendente" && ["cartao","dinheiro"].includes(p.pagamento_metodo) && p.pagamento_status!=="cancelado"
-            ? [h("button",{class:"btn btn-sm btn-success",type:"button",onclick:()=>confirmarPagamentoPresencial(p.pagamento_id)},p.pagamento_status==="confirmado"?"Aprovar pedido":"Confirmar recebimento")]
-            : p.status==="pendente" && p.pagamento_metodo==="pix" && p.pagamento_status==="pendente"
-              ? [h("span",{class:"small text-warning"},"Aguardando PIX")]
-              : p.status==="aprovado"
-                ? [h("button",{class:"btn btn-sm btn-info",type:"button",onclick:()=>mudarStatus(p.id,"entregue")},"Marcar entregue")]
-                : []),
-          ...(p.status==="pendente" && p.pagamento_metodo!=="pix" ? [h("button",{class:"btn btn-sm btn-outline-danger",type:"button",onclick:()=>mudarStatus(p.id,"rejeitado")},"Rejeitar")] : [])
-        ))
-      );
-      return tr;
-    }) : h("tr",{},h("td",{colspan:7,class:"text-center text-secondary py-4"},"Nenhum pedido encontrado.")));
-    $("gPedTabela").replaceChildren(tabela(["Pedido","Cliente","Data","Total","Forma de pagamento","Status","Ações"],corpo));
+    const corpo = h(
+      "tbody",
+      {},
+      lista.length
+        ? lista.map((p) => {
+            const tr = h(
+              "tr",
+              {},
+              h("td", {}, "#" + p.id),
+              h(
+                "td",
+                {},
+                h("div", {}, p.cliente),
+                h("div", { class: "small text-secondary" }, p.cliente_email)
+              ),
+              h("td", {}, dataBR(p.criado_em)),
+              h("td", {}, brl(p.total_centavos)),
+              h(
+                "td",
+                {},
+                p.pagamento_status
+                  ? badge(PAG[p.pagamento_status], COR[p.pagamento_status])
+                  : badge("Sem pagamento", "secondary")
+              ),
+              h("td", {}, badge(STATUS[p.status] || p.status, COR[p.status])),
+              h(
+                "td",
+                { class: "text-end text-nowrap" },
+                h(
+                  "button",
+                  {
+                    class: "btn btn-sm btn-outline-secondary me-1",
+                    type: "button",
+                    onclick: () => alternarItens(tr, p.id),
+                  },
+                  "Itens"
+                ),
+                p.status === "pendente" && [
+                  p.pagamento_metodo !== "pix" ? h(
+                    "button",
+                    {
+                      class: "btn btn-sm btn-success me-1",
+                      type: "button",
+                      disabled: p.pagamento_status !== "confirmado",
+                      title:
+                        p.pagamento_status !== "confirmado"
+                          ? "Aguardando pagamento"
+                          : "",
+                      onclick: () => mudarStatus(p.id, "aprovado"),
+                    },
+                    "Aprovar"
+                  ) : null,
+                  h(
+                    "button",
+                    {
+                      class: "btn btn-sm btn-outline-danger",
+                      type: "button",
+                      onclick: () => mudarStatus(p.id, "rejeitado"),
+                    },
+                    "Rejeitar"
+                  ),
+                ],
+                p.status === "aprovado"
+                  ? h(
+                      "button",
+                      {
+                        class: "btn btn-sm btn-info",
+                        type: "button",
+                        onclick: () => mudarStatus(p.id, "entregue"),
+                      },
+                      "Marcar entregue"
+                    )
+                  : null
+              )
+            );
+            return tr;
+          })
+        : h(
+            "tr",
+            {},
+            h(
+              "td",
+              { colspan: 7, class: "text-center text-secondary" },
+              "Nenhum pedido encontrado."
+            )
+          )
+    );
+    $("gPedTabela").replaceChildren(
+      tabela(
+        ["Pedido", "Cliente", "Data", "Total", "Pagamento", "Status", ""],
+        corpo
+      )
+    );
   }
 
   function sincronizarGerente() {
