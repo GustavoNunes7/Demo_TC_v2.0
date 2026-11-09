@@ -223,6 +223,7 @@ r.delete("/perfil", autenticar, wrap(async (req, res) => {
   const senha = req.body?.senha;
   const u = get("usuarios", req.usuario.id);
   if (!u || u.ativo === 0) return res.sendStatus(404);
+  if (u.admin_lider === 1) return res.status(403).json({ erro: "Transfira a liderança para outro administrador antes de encerrar esta conta." });
   if (typeof senha !== "string" || !(await bcrypt.compare(senha, u.senha_hash)))
     return res.status(401).json({ erro: "Confirme sua senha para encerrar a conta." });
   db.prepare("UPDATE usuarios SET ativo=0,email=?,nome=?,telefone=NULL,foto_url=NULL WHERE id=?")
