@@ -944,7 +944,7 @@
     const area=$("caSecParcelas"),select=$("caParcelas"); if(!area||!select)return;
     const credito=estadoPagamento.metodo==="cartao"&&estadoPagamento.tipoCartao==="credito";
     const max=credito?maxParcelasCredito(totalCarrinho()):1; area.hidden=!credito||max<=1; select.replaceChildren();
-    for(let n=1;n<=max;n++)select.append(h("option",{value:String(n)},n+"x de até "+brl(Math.ceil(totalCarrinho()/n))+(n>1?" sem juros":"")));
+    for(let n=1;n<=max;n++)select.append(h("option",{value:String(n)},n+"x de até "+brl(Math.ceil(totalCarrinho()/n))));
     estadoPagamento.parcelas=Math.min(estadoPagamento.parcelas||1,max);select.value=String(estadoPagamento.parcelas);
   }
 
@@ -2386,7 +2386,7 @@
       if (p.pagamento_metodo === "pix" && p.pagamento_status === "pendente" && p.pagamento_expira_em) {
         detalhes.push("Aguardando pagamento · prazo até " + new Date(Number(p.pagamento_expira_em)).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
       }
-      if (p.pagamento_metodo === "cartao" && p.tipo_cartao === "credito" && Number(p.parcelas||1)>1) detalhes.push(p.parcelas+" parcelas sem juros");
+      if (p.pagamento_metodo === "cartao" && p.tipo_cartao === "credito" && Number(p.parcelas||1)>1) detalhes.push(p.parcelas+" parcelas");
       const pagamentoCell = h("div", {class:"tc-admin-payment"},
         h("div",{class:"fw-semibold"},metodo),
         h("div",{class:"small mt-1"},p.pagamento_status ? badge(PAG[p.pagamento_status] || p.pagamento_status,COR[p.pagamento_status] || "secondary") : badge("Sem pagamento","secondary")),
