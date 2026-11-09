@@ -2504,3 +2504,24 @@ html[data-bs-theme="light"] #sistemaInicio .main-content hr {
     min-width: 680px;
   }
 }
+
+/* Pedidos e pagamentos: hierarquia visual consistente nos dois temas */
+.tc-admin-payment{display:flex;flex-direction:column;align-items:flex-start;gap:.35rem;min-width:185px;padding:.65rem .75rem;border:1px solid var(--bs-border-color);border-radius:12px;background:rgba(120,130,145,.08);color:var(--bs-body-color)}
+.tc-admin-payment strong{font-size:.9rem;color:var(--bs-body-color)}
+.tc-admin-payment small{font-size:.78rem;line-height:1.4;color:var(--bs-secondary-color)}
+#modalPagamento .modal-content{border-radius:18px;border:1px solid var(--bs-border-color);box-shadow:0 18px 55px rgba(0,0,0,.24)}
+#modalPagamento .modal-body{line-height:1.55}
+#modalPagamento .form-control,#modalPagamento .form-select{min-height:42px}
+#modalPagamento .bg-secondary-subtle{background:var(--bs-tertiary-bg)!important;color:var(--bs-body-color)!important;border:1px solid var(--bs-border-color)}
+html[data-bs-theme="light"] .tc-admin-payment{background:#f8fafc;border-color:#dbe2ec}
+html[data-bs-theme="light"] .tc-admin-payment strong{color:#172033}
+html[data-bs-theme="light"] .tc-admin-payment small{color:#526174}
+html[data-bs-theme="light"] #modalPagamento .modal-content{background:#fff;color:#172033}
+html[data-bs-theme="light"] #modalPagamento .modal-title,
+html[data-bs-theme="light"] #modalPagamento h5,
+html[data-bs-theme="light"] #modalPagamento h6,
+html[data-bs-theme="light"] #modalPagamento strong,
+html[data-bs-theme="light"] #modalPagamento label{color:#172033}
+html[data-bs-theme="light"] #modalPagamento .text-white-50{color:#526174!important}
+html[data-bs-theme="light"] #modalPagamento .form-control,
+html[data-bs-theme="light"] #modalPagamento .form-select{background:#fff!important;color:#172033!important;border-color:#cbd5e1!important}
