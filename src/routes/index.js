@@ -347,18 +347,14 @@ r.post("/admin/assumir-lideranca", autenticar, admin, (req, res) => {
   res.json(publicUser(get("usuarios", req.usuario.id)));
 });
 
-r.post("/admin/transferir-lideranca", autenticar, admin, lider, (req, res) => {
+r.post("/admin/promover-lider", autenticar, admin, lider, (req, res) => {
   const novoLiderId = positiveId(req.body.usuario_id);
   const novoLider = get("usuarios", novoLiderId);
-  if (!novoLider || novoLider.papel !== "admin" || novoLider.ativo !== 1 || novoLider.admin_lider === 1)
-    return bad(res, "Selecione um administrador comum ativo para receber a liderança.");
-  if (novoLider.id === req.usuario.id) return bad(res, "A conta atual já é a Administradora Líder.");
-  db.transaction(() => {
-    db.prepare("UPDATE usuarios SET admin_lider=0 WHERE id=? AND admin_lider=1").run(req.usuario.id);
-    const atualizado = db.prepare("UPDATE usuarios SET admin_lider=1 WHERE id=? AND papel='admin' AND ativo=1").run(novoLider.id);
-    if (atualizado.changes !== 1) throw new Error("Não foi possível transferir a liderança.");
-  })();
-  res.json({ ok: true, mensagem: "Liderança transferida com sucesso. Entre novamente para atualizar as permissões." });
+  if (!novoLider || novoLider.papel !== "admin" || novoLider.ativo !== 1) return bad(res, "Selecione um administrador ativo.");
+  if (novoLider.admin_lider === 1) return res.status(409).json({ erro: "Este administrador já é Líder." });
+  const atualizado = db.prepare("UPDATE usuarios SET admin_lider=1 WHERE id=? AND papel='admin' AND ativo=1 AND admin_lider=0").run(novoLider.id);
+  if (atualizado.changes !== 1) return res.status(409).json({ erro: "Não foi possível promover este administrador." });
+  res.json({ ok: true, mensagem: "Administrador promovido a Líder. Sua própria liderança foi mantida." });
 });
 
 // Exclusão lógica de alunos e remoção de acesso administrativo: preserva o histórico relacionado.
@@ -427,6 +423,55 @@ r.get("/admin/tokens", autenticar, admin, (_req, res) => {
 });
 
 // Produtos
+
+// Controle financeiro e estoque integrado: disponível para todos os administradores.
+r.get("/admin/financeiro/resumo", autenticar, admin, (req, res) => {
+  const mes = /^\d{4}-\d{2}$/.test(String(req.query.mes || "")) ? String(req.query.mes) : new Date().toISOString().slice(0,7);
+  const [ano, numeroMes] = mes.split("-").map(Number);
+  const base = new Date(Date.UTC(ano, numeroMes-1, 1));
+  const meses = [];
+  for (let i=11;i>=0;i--) meses.push(new Date(Date.UTC(base.getUTCFullYear(),base.getUTCMonth()-i,1)).toISOString().slice(0,7));
+  const inicio=meses[0];
+  const receitas=db.prepare("SELECT substr(criado_em,1,7) mes,SUM(valor_centavos) total FROM pagamentos WHERE status='confirmado' AND substr(criado_em,1,7)>=? AND substr(criado_em,1,7)<=? GROUP BY substr(criado_em,1,7)").all(inicio,mes);
+  const despesas=db.prepare("SELECT substr(data_despesa,1,7) mes,SUM(valor_centavos) total FROM despesas_financeiras WHERE data_despesa>=? AND data_despesa<=? GROUP BY substr(data_despesa,1,7)").all(inicio+"-01",mes+"-31");
+  const rmap=new Map(receitas.map(x=>[x.mes,Number(x.total||0)])), dmap=new Map(despesas.map(x=>[x.mes,Number(x.total||0)]));
+  const grafico=meses.map(m=>({mes:m,receita:rmap.get(m)||0,despesas:dmap.get(m)||0,resultado:(rmap.get(m)||0)-(dmap.get(m)||0)}));
+  const receitaMes=Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM pagamentos WHERE status='confirmado' AND substr(criado_em,1,7)=?").get(mes).total);
+  const despesaMes=Number(db.prepare("SELECT COALESCE(SUM(valor_centavos),0) total FROM despesas_financeiras WHERE substr(data_despesa,1,7)=?").get(mes).total);
+  const maisVendidos=db.prepare(`
+    SELECT pr.id,pr.nome,pr.categoria,SUM(i.quantidade) quantidade,
+      SUM(i.quantidade*i.preco_unitario_centavos) faturamento_centavos
+    FROM itens_pedido i JOIN pedidos p ON p.id=i.pedido_id
+    JOIN pagamentos pg ON pg.pedido_id=p.id AND pg.status='confirmado'
+    JOIN produtos pr ON pr.id=i.produto_id
+    GROUP BY pr.id,pr.nome,pr.categoria
+    ORDER BY quantidade DESC,faturamento_centavos DESC LIMIT 8
+  `).all();
+  const ultimasDespesas=db.prepare(`SELECT d.*,pr.nome produto_nome,u.nome responsavel
+    FROM despesas_financeiras d LEFT JOIN produtos pr ON pr.id=d.produto_id
+    LEFT JOIN usuarios u ON u.id=d.usuario_id ORDER BY d.data_despesa DESC,d.id DESC LIMIT 30`).all();
+  const estoque=db.prepare("SELECT COUNT(*) produtos,COALESCE(SUM(estoque),0) unidades,SUM(CASE WHEN estoque<=3 THEN 1 ELSE 0 END) baixo FROM produtos WHERE ativo=1 AND excluido=0").get();
+  res.json({mes,receita_centavos:receitaMes,despesas_centavos:despesaMes,resultado_centavos:receitaMes-despesaMes,grafico,mais_vendidos:maisVendidos,despesas:ultimasDespesas,estoque});
+});
+r.post("/admin/financeiro/despesas", autenticar, admin, (req,res)=>{
+  const categoria=clean(req.body.categoria,40),descricao=clean(req.body.descricao,180),valor=Number(req.body.valor_centavos),data=clean(req.body.data_despesa,10);
+  if(!categoria||!descricao||!Number.isSafeInteger(valor)||valor<=0||!/^\d{4}-\d{2}-\d{2}$/.test(data)||!Number.isFinite(Date.parse(data+"T12:00:00"))) return bad(res,"Informe categoria, descrição, valor e data válidos.");
+  const info=db.prepare("INSERT INTO despesas_financeiras(categoria,descricao,valor_centavos,data_despesa,usuario_id) VALUES(?,?,?,?,?)").run(categoria,descricao,valor,data,req.usuario.id);
+  res.status(201).json(db.prepare("SELECT * FROM despesas_financeiras WHERE id=?").get(info.lastInsertRowid));
+});
+r.post("/admin/estoque/compras", autenticar, admin, (req,res)=>{
+  const produtoId=positiveId(req.body.produto_id),quantidade=Number(req.body.quantidade),custo=Number(req.body.custo_unitario_centavos),data=clean(req.body.data_compra,10),observacao=clean(req.body.observacao,180),produto=get("produtos",produtoId);
+  if(!produto||produto.excluido===1) return res.status(404).json({erro:"Produto não encontrado."});
+  if(!Number.isSafeInteger(quantidade)||quantidade<1||quantidade>100000||!Number.isSafeInteger(custo)||custo<1||custo>100000000||!/^\d{4}-\d{2}-\d{2}$/.test(data)||!Number.isFinite(Date.parse(data+"T12:00:00"))) return bad(res,"Informe quantidade, custo unitário e data válidos.");
+  const total=quantidade*custo;if(!Number.isSafeInteger(total)||total<=0)return bad(res,"Valor total da compra inválido.");
+  db.transaction(()=>{
+    db.prepare("UPDATE produtos SET estoque=estoque+? WHERE id=?").run(quantidade,produtoId);
+    db.prepare("INSERT INTO movimentacoes_estoque(produto_id,tipo,quantidade,custo_unitario_centavos,total_centavos,observacao,usuario_id) VALUES(?,'entrada_compra',?,?,?,?,?)").run(produtoId,quantidade,custo,total,observacao,req.usuario.id);
+    db.prepare("INSERT INTO despesas_financeiras(categoria,descricao,valor_centavos,data_despesa,origem,produto_id,quantidade,usuario_id) VALUES('Estoque',?,?,?,'compra_estoque',?,?,?)").run("Reposição: "+produto.nome,total,data,produtoId,quantidade,req.usuario.id);
+  })();
+  res.status(201).json({ok:true,produto:get("produtos",produtoId),quantidade,valor_total_centavos:total});
+});
+
 r.get("/produtos", (req, res) => {
   const categoria = clean(req.query.categoria, 50);
   res.json(
