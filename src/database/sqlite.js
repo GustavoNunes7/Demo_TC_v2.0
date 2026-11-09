@@ -111,4 +111,8 @@ if (!colunasProdutos.includes("excluido")) db.exec("ALTER TABLE produtos ADD COL
 const colunasUsuarios = db.prepare("PRAGMA table_info(usuarios)").all().map((c) => c.name);
 if (!colunasUsuarios.includes("ativo")) db.exec("ALTER TABLE usuarios ADD COLUMN ativo INTEGER NOT NULL DEFAULT 1");
 if (!colunasUsuarios.includes("foto_url")) db.exec("ALTER TABLE usuarios ADD COLUMN foto_url TEXT");
+if (!colunasUsuarios.includes("cpf")) db.exec("ALTER TABLE usuarios ADD COLUMN cpf TEXT");
+if (!colunasUsuarios.includes("data_nascimento")) db.exec("ALTER TABLE usuarios ADD COLUMN data_nascimento TEXT");
+if (!colunasUsuarios.includes("genero")) db.exec("ALTER TABLE usuarios ADD COLUMN genero TEXT");
+if (!colunasUsuarios.includes("observacao")) db.exec("ALTER TABLE usuarios ADD COLUMN observacao TEXT");
 module.exports = { db, ready: Promise.resolve() };
