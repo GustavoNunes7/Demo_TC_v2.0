@@ -1086,13 +1086,8 @@
     modalPagamento = new bootstrap.Modal($("modalPagamento"));
 
     $("modalPagamento").addEventListener("hidden.bs.modal", () => {
-      // Quando fecha sem pagar, cancela o pedido
-      if (estadoCompra.pedido && !estadoCompra.pago && estadoPagamento.metodo !== "pix") {
-        try { api(`/pedidos/${estadoCompra.pedido.id}/cancelar`, { method: "POST" }); }
-        catch { /* já tratado */ }
-        carregarProdutos();
-      }
-      // PIX permanece reservado até o prazo de 15 minutos; fechar a janela não cancela a compra.
+      // Fechar a janela não cancela pedidos: dinheiro/cartão continuam aguardando o Admin,
+      // e o PIX continua aguardando a simulação de pagamento.
       resetEstadoCompra();
     });
   }
@@ -1189,7 +1184,7 @@
       h(
         "p",
         { class: "small text-white-50 mb-0" },
-        "Pague com seu banco ou aplicativo de PIX. Após a confirmação do pagamento, o pedido será aprovado e o token será gerado automaticamente."
+        "Esta é uma demonstração: clique em “Simular confirmação PIX” para marcar como pago, aprovar o pedido e gerar seu token automaticamente."
       ),
       h("div", { class: "alert alert-warning mt-3 mb-0 small" },
         h("i", { class: "bi bi-clock me-2" }),
@@ -1231,7 +1226,7 @@
       h(
         "p",
         { class: "small text-white-50 mt-3 mb-0" },
-        "O pagamento será confirmado pelo responsável após a entrega do dinheiro."
+        "Apresente o valor a um responsável da AAPM. O pedido ficará pendente até o administrador confirmar o recebimento; depois, o token será gerado."
       )
     );
 
@@ -1251,7 +1246,7 @@
       h(
         "p",
         { class: "small text-white-50 mt-3 mb-0" },
-        "Procure um responsável da AAPM para realizar o pagamento presencial. O pedido será aprovado e o token gerado somente após a confirmação do recebimento."
+        "Apresente este pedido a um responsável da AAPM. Ele ficará pendente até o administrador confirmar o recebimento presencial; depois, o token será gerado."
       )
     );
 
