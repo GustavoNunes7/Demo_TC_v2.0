@@ -9,7 +9,7 @@ const rateLimit = require("express-rate-limit"),
   path = require("path");
 const { db, publicUser, validEmail, clean, positiveId } = require("../models");
 const autenticar = require("../middlewares/auth"),
-  { admin } = require("../middlewares/auth");
+  { admin, lider } = require("../middlewares/auth");
 const r = express.Router(),
   wrap = (fn) => (req, res, next) =>
     Promise.resolve()
@@ -235,7 +235,7 @@ r.get("/usuarios", autenticar, admin, (_req, res) =>
   res.json(
     db
       .prepare(
-        "SELECT id,nome,email,papel,turma,matricula,telefone,cpf,data_nascimento,genero,observacao,ativo,foto_url,criado_em FROM usuarios ORDER BY id DESC",
+        "SELECT id,nome,email,papel,admin_lider,turma,matricula,telefone,cpf,data_nascimento,genero,observacao,ativo,foto_url,criado_em FROM usuarios ORDER BY id DESC",
       )
       .all(),
   ),
@@ -255,6 +255,7 @@ r.post("/usuarios", autenticar, admin, wrap(async (req, res) => {
   const nome = clean(req.body.nome, 100), email = clean(req.body.email, 254).toLowerCase();
   const senha = req.body.senha, papel = req.body.papel || "aluno";
   if (nome.length < 2 || !validEmail(email) || typeof senha !== "string" || senha.length < 5 || senha.length > 128 || !allowed(papel, ["aluno", "admin"])) return bad(res, "Informe nome, e-mail válido, senha de 5 a 128 caracteres e perfil válido.");
+  if (papel === "admin" && req.usuario.admin_lider !== true) return res.status(403).json({ erro: "Somente o Administrador Líder pode criar administradores." });
   if (db.prepare("SELECT id FROM usuarios WHERE email=?").get(email)) return res.status(409).json({ erro: "E-mail já cadastrado." });
   const hash = await bcrypt.hash(senha, 12);
   const cpf = clean(req.body.cpf, 14);
@@ -272,6 +273,8 @@ r.post("/usuarios", autenticar, admin, wrap(async (req, res) => {
 r.patch("/usuarios/:id", autenticar, admin, wrap(async (req, res) => {
   const id = positiveId(req.params.id), u = get("usuarios", id);
   if (!u) return res.sendStatus(404);
+  if (u.admin_lider === 1) return res.status(403).json({ erro: "O cadastro do Administrador Líder não pode ser alterado pela gestão de usuários." });
+  if (u.papel === "admin" && req.usuario.admin_lider !== true) return res.status(403).json({ erro: "Somente o Administrador Líder pode editar outro administrador." });
   const nome = req.body.nome === undefined ? u.nome : clean(req.body.nome, 100);
   const email = req.body.email === undefined ? u.email : clean(req.body.email, 254).toLowerCase();
   const turma = req.body.turma === undefined ? u.turma : clean(req.body.turma, 60);
@@ -284,6 +287,8 @@ r.patch("/usuarios/:id", autenticar, admin, wrap(async (req, res) => {
   const papel = req.body.papel === undefined ? u.papel : req.body.papel;
   const ativo = req.body.ativo === undefined ? u.ativo : (req.body.ativo === false || req.body.ativo === 0 ? 0 : 1);
   if (nome.length < 2 || !validEmail(email) || !allowed(papel, ["aluno", "admin"])) return bad(res, "Dados de usuário inválidos.");
+  if (papel === "admin" && u.papel !== "admin" && req.usuario.admin_lider !== true) return res.status(403).json({ erro: "Somente o Administrador Líder pode promover usuários a administrador." });
+  if (u.papel === "admin" && papel === "aluno" && req.usuario.admin_lider !== true) return res.status(403).json({ erro: "Somente o Administrador Líder pode rebaixar administradores." });
   if (cpf && !/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(cpf) && !/^\d{11}$/.test(cpf)) return bad(res, "CPF inválido.");
   if (dataNascimento && (!/^\d{4}-\d{2}-\d{2}$/.test(dataNascimento) || !Number.isFinite(Date.parse(dataNascimento + "T12:00:00")))) return bad(res, "Data de nascimento inválida.");
   if (!allowed(genero, ["", "masculino", "feminino", "nao_informar", "outro"])) return bad(res, "Gênero inválido.");
@@ -301,6 +306,46 @@ r.patch("/usuarios/:id", autenticar, admin, wrap(async (req, res) => {
   const atualizado = get("usuarios", id);
   res.json({ ...publicUser(atualizado), ativo: atualizado.ativo });
 }));
+// Gestão exclusiva da liderança administrativa.
+// O primeiro administrador ativo pode assumir a liderança somente enquanto não existir líder.
+r.post("/admin/assumir-lideranca", autenticar, admin, (req, res) => {
+  const assumiu = db.transaction(() => {
+    const existe = db.prepare("SELECT id FROM usuarios WHERE admin_lider=1 LIMIT 1").get();
+    if (existe) return false;
+    const resultado = db.prepare("UPDATE usuarios SET admin_lider=1 WHERE id=? AND papel='admin' AND ativo=1").run(req.usuario.id);
+    return resultado.changes === 1;
+  })();
+  if (!assumiu) return res.status(409).json({ erro: "A liderança já foi definida ou sua conta não pode assumir esse cargo." });
+  res.json(publicUser(get("usuarios", req.usuario.id)));
+});
+
+r.post("/admin/transferir-lideranca", autenticar, admin, lider, (req, res) => {
+  const novoLiderId = positiveId(req.body.usuario_id);
+  const novoLider = get("usuarios", novoLiderId);
+  if (!novoLider || novoLider.papel !== "admin" || novoLider.ativo !== 1 || novoLider.admin_lider === 1)
+    return bad(res, "Selecione um administrador comum ativo para receber a liderança.");
+  if (novoLider.id === req.usuario.id) return bad(res, "A conta atual já é a Administradora Líder.");
+  db.transaction(() => {
+    db.prepare("UPDATE usuarios SET admin_lider=0 WHERE id=? AND admin_lider=1").run(req.usuario.id);
+    const atualizado = db.prepare("UPDATE usuarios SET admin_lider=1 WHERE id=? AND papel='admin' AND ativo=1").run(novoLider.id);
+    if (atualizado.changes !== 1) throw new Error("Não foi possível transferir a liderança.");
+  })();
+  res.json({ ok: true, mensagem: "Liderança transferida com sucesso. Entre novamente para atualizar as permissões." });
+});
+
+// A remoção de um administrador é lógica: preserva pedidos, documentos e histórico.
+r.delete("/usuarios/:id", autenticar, admin, lider, (req, res) => {
+  const id = positiveId(req.params.id);
+  const usuario = get("usuarios", id);
+  if (!usuario) return res.sendStatus(404);
+  if (usuario.admin_lider === 1 || usuario.id === req.usuario.id)
+    return res.status(403).json({ erro: "O Administrador Líder não pode remover a própria conta nem a liderança atual." });
+  if (usuario.papel !== "admin")
+    return bad(res, "Esta ação é exclusiva para remover o acesso de outro administrador.");
+  db.prepare("UPDATE usuarios SET ativo=0 WHERE id=?").run(id);
+  res.json({ ok: true, mensagem: "Acesso administrativo removido. O histórico foi preservado." });
+});
+
 // Endpoints específicos do painel de gerência (mantêm compatibilidade com a interface original).
 r.get("/admin/produtos", autenticar, admin, (_req, res) => {
   res.json(db.prepare("SELECT * FROM produtos WHERE excluido=0 ORDER BY id DESC").all());
@@ -433,10 +478,13 @@ r.delete("/produtos/:id", autenticar, admin, (req, res) => {
   res.status(204).end();
 });
 
-// Pedidos: reserva atômica do estoque
+// Pedidos: reserva atômica do estoque com idempotência por usuário.
 r.post("/pedidos", autenticar, (req, res) => {
   if (req.usuario.papel === "admin")
     return res.status(403).json({ erro: "Contas administrativas não podem realizar compras." });
+  const chave = req.get("Idempotency-Key");
+  if (typeof chave !== "string" || !/^[A-Za-z0-9._:-]{16,100}$/.test(chave))
+    return bad(res, "Chave de compra ausente ou inválida. Atualize a página e tente novamente.");
   const itens = req.body.itens;
   if (!Array.isArray(itens) || !itens.length || itens.length > 30)
     return bad(res, "Informe de 1 a 30 itens.");
@@ -453,10 +501,15 @@ r.post("/pedidos", autenticar, (req, res) => {
     ids.add(item.produto_id);
   }
   try {
-    const pedido = db.transaction(() => {
+    const resultado = db.transaction(() => {
+      const existente = db.prepare(
+        "SELECT id FROM pedidos WHERE usuario_id=? AND chave_idempotencia=?"
+      ).get(req.usuario.id, chave);
+      if (existente) return { id: existente.id, repetido: true };
+
       const info = db
-        .prepare("INSERT INTO pedidos(usuario_id,observacao) VALUES(?,?)")
-        .run(req.usuario.id, clean(req.body.observacao, 1000));
+        .prepare("INSERT INTO pedidos(usuario_id,observacao,chave_idempotencia) VALUES(?,?,?)")
+        .run(req.usuario.id, clean(req.body.observacao, 1000), chave);
       for (const item of itens) {
         const p = get("produtos", item.produto_id);
         if (!p || !p.ativo || p.estoque < item.quantidade)
@@ -471,9 +524,9 @@ r.post("/pedidos", autenticar, (req, res) => {
           "INSERT INTO itens_pedido(pedido_id,produto_id,quantidade,preco_unitario_centavos) VALUES(?,?,?,?)",
         ).run(info.lastInsertRowid, p.id, item.quantidade, p.preco_centavos);
       }
-      return info.lastInsertRowid;
+      return { id: info.lastInsertRowid, repetido: false };
     })();
-    res.status(201).json(detalharPedido(pedido));
+    res.status(resultado.repetido ? 200 : 201).json(detalharPedido(resultado.id));
   } catch (e) {
     return bad(res, e.message);
   }
