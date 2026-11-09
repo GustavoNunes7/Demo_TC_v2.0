@@ -188,7 +188,7 @@ r.patch("/perfil", autenticar, (req, res) => {
   // O aluno pode editar somente telefone, gênero e observação.
   // A foto é atualizada exclusivamente pela rota /perfil/foto.
   if (u.papel === "aluno") {
-    const bloqueados = ["nome", "email", "turma", "cpf", "data_nascimento", "ativo", "papel", "foto_url"];
+    const bloqueados = ["nome", "email", "turma", "matricula", "cpf", "data_nascimento", "ativo", "papel", "foto_url"];
     if (bloqueados.some((campo) => Object.prototype.hasOwnProperty.call(req.body, campo))) {
       return res.status(403).json({ erro: "Seu perfil não permite alterar esses dados cadastrais." });
     }
