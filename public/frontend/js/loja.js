@@ -1479,6 +1479,7 @@
           <li class="nav-item"><button type="button" class="nav-link" id="tabGPed">Pedidos</button></li>
           <li class="nav-item"><button type="button" class="nav-link" id="tabGTok">Tokens IoT</button></li>
           <li class="nav-item"><button type="button" class="nav-link" id="tabGAvisos">Avisos</button></li>
+          <li class="nav-item"><button type="button" class="nav-link" id="tabGFin">Financeiro + Estoque</button></li>
         </ul>
         <div id="gProdutos">
           <div class="d-flex flex-wrap gap-2 mb-3">
@@ -1512,6 +1513,49 @@
           </form>
           <div class="d-flex align-items-center justify-content-between gap-2 mb-3"><h5 class="mb-0">Avisos cadastrados</h5><button type="button" class="btn btn-outline-light btn-sm" id="gAvisoAtualizar">Atualizar</button></div>
           <div id="gAvisoLista"></div>
+        </div>
+
+        <div id="gFinanceiro" hidden>
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <h4 class="mb-0 me-auto">Visão financeira</h4>
+            <label class="small" for="gFinMes">Mês de referência</label>
+            <input id="gFinMes" type="month" class="form-control bg-dark text-white border-secondary" style="max-width:180px">
+            <button type="button" class="btn btn-outline-light" id="gFinAtualizar">Atualizar</button>
+          </div>
+          <div class="row g-3 mb-4">
+            <div class="col-12 col-md-4"><div class="border border-secondary rounded-3 p-3 h-100"><div class="text-secondary small">Faturamento confirmado</div><div class="fs-3 fw-bold" id="gFinReceita">R$ 0,00</div></div></div>
+            <div class="col-12 col-md-4"><div class="border border-secondary rounded-3 p-3 h-100"><div class="text-secondary small">Despesas registradas</div><div class="fs-3 fw-bold" id="gFinDespesas">R$ 0,00</div></div></div>
+            <div class="col-12 col-md-4"><div class="border border-secondary rounded-3 p-3 h-100"><div class="text-secondary small">Resultado estimado</div><div class="fs-3 fw-bold" id="gFinResultado">R$ 0,00</div></div></div>
+          </div>
+          <div class="row g-3 mb-4">
+            <div class="col-12 col-xl-7"><div class="border border-secondary rounded-3 p-3 h-100"><h5>Movimentação mensal (12 meses)</h5><div id="gFinGrafico" class="d-flex align-items-end gap-2 overflow-auto" style="min-height:210px"></div><div class="small text-secondary mt-2">Receita e despesas por mês. Somente pagamentos confirmados entram como faturamento.</div></div></div>
+            <div class="col-12 col-xl-5"><div class="border border-secondary rounded-3 p-3 h-100"><h5>Produtos mais vendidos</h5><div id="gFinMaisVendidos"></div></div></div>
+          </div>
+          <div class="border border-secondary rounded-3 p-3 mb-4">
+            <h5 class="mb-3">Comprar reposição de estoque</h5>
+            <form id="gEstoqueCompra" class="row g-2">
+              <div class="col-12 col-md-4"><label class="form-label small" for="gEstoqueProduto">Produto</label><select id="gEstoqueProduto" class="form-select bg-dark text-white border-secondary" required></select></div>
+              <div class="col-6 col-md-2"><label class="form-label small" for="gEstoqueQtd">Quantidade</label><input id="gEstoqueQtd" type="number" min="1" step="1" class="form-control bg-dark text-white border-secondary" required></div>
+              <div class="col-6 col-md-2"><label class="form-label small" for="gEstoqueCusto">Custo unitário (R$)</label><input id="gEstoqueCusto" type="number" min="0.01" step="0.01" class="form-control bg-dark text-white border-secondary" required></div>
+              <div class="col-12 col-md-2"><label class="form-label small" for="gEstoqueData">Data da compra</label><input id="gEstoqueData" type="date" class="form-control bg-dark text-white border-secondary" required></div>
+              <div class="col-12 col-md-2 d-flex align-items-end"><button class="btn btn-danger w-100" type="submit">Registrar compra</button></div>
+              <div class="col-12"><label class="form-label small" for="gEstoqueObs">Observação (opcional)</label><input id="gEstoqueObs" maxlength="180" class="form-control bg-dark text-white border-secondary" placeholder="Fornecedor ou detalhes"></div>
+            </form>
+            <div id="gEstoqueMsg" class="small mt-2" role="status"></div>
+          </div>
+          <div class="border border-secondary rounded-3 p-3 mb-4">
+            <h5 class="mb-3">Registrar outra despesa</h5>
+            <form id="gFinDespesaForm" class="row g-2">
+              <div class="col-12 col-md-3"><label class="form-label small" for="gFinCategoria">Categoria</label><select id="gFinCategoria" class="form-select bg-dark text-white border-secondary"><option>Operacional</option><option>Material</option><option>Manutenção</option><option>Serviços</option><option>Outros</option></select></div>
+              <div class="col-12 col-md-4"><label class="form-label small" for="gFinDescricao">Descrição</label><input id="gFinDescricao" maxlength="180" class="form-control bg-dark text-white border-secondary" required></div>
+              <div class="col-6 col-md-2"><label class="form-label small" for="gFinValor">Valor (R$)</label><input id="gFinValor" type="number" min="0.01" step="0.01" class="form-control bg-dark text-white border-secondary" required></div>
+              <div class="col-6 col-md-2"><label class="form-label small" for="gFinData">Data</label><input id="gFinData" type="date" class="form-control bg-dark text-white border-secondary" required></div>
+              <div class="col-12 col-md-1 d-flex align-items-end"><button class="btn btn-outline-light w-100" type="submit">Salvar</button></div>
+            </form>
+            <div id="gFinDespesaMsg" class="small mt-2" role="status"></div>
+          </div>
+          <div class="border border-secondary rounded-3 p-3"><h5>Despesas recentes</h5><div id="gFinHistorico"></div></div>
+          <div id="gFinMsg" role="alert" class="small mt-3"></div>
         </div>
         <div id="gPedidos" hidden>
           <div class="d-flex flex-wrap gap-2 mb-3">
@@ -1571,6 +1615,14 @@
     $("tabGPed").onclick = () => aba("ped");
     $("tabGTok").onclick = () => aba("tokens");
     $("tabGAvisos").onclick = () => aba("avisos");
+    $("tabGFin").onclick = () => aba("financeiro");
+    $("gFinMes").value = new Date().toISOString().slice(0,7);
+    $("gEstoqueData").value = new Date().toISOString().slice(0,10);
+    $("gFinData").value = new Date().toISOString().slice(0,10);
+    $("gFinAtualizar").onclick = carregarFinanceiroAdmin;
+    $("gEstoqueCompra").addEventListener("submit", registrarCompraEstoque);
+    $("gFinDespesaForm").addEventListener("submit", registrarDespesaFinanceira);
+
     $("gAtualizarTokens").onclick = carregarTokensAdmin;
     $("gFormAviso").addEventListener("submit", salvarAvisoAdmin);
     $("gAvisoCancelar").onclick = resetAvisoAdmin;
@@ -1640,13 +1692,99 @@
     $("tabGPed").classList.toggle("active", qual === "ped");
     $("tabGTok").classList.toggle("active", qual === "tokens");
     $("tabGAvisos").classList.toggle("active", qual === "avisos");
+    $("tabGFin").classList.toggle("active", qual === "financeiro");
     $("gProdutos").hidden = qual !== "prod";
     $("gPedidos").hidden = qual !== "ped";
     $("gTokens").hidden = qual !== "tokens";
     $("gAvisos").hidden = qual !== "avisos";
+    $("gFinanceiro").hidden = qual !== "financeiro";
+    if (qual === "financeiro") carregarFinanceiroAdmin();
     if (qual === "ped") carregarPedidosAdmin();
     if (qual === "tokens") carregarTokensAdmin();
     if (qual === "avisos") carregarAvisosAdmin();
+  }
+
+
+  function valorReal(centavos) { return brl(Number(centavos || 0)); }
+
+  async function carregarFinanceiroAdmin() {
+    const msg=$("gFinMsg"); if(!msg)return;
+    setMsg(msg,"Carregando dados financeiros...","secondary");
+    try {
+      const [dados,produtos]=await Promise.all([
+        api("/admin/financeiro/resumo?mes="+encodeURIComponent($("gFinMes").value)),
+        api("/admin/produtos")
+      ]);
+      $("gFinReceita").textContent=valorReal(dados.receita_centavos);
+      $("gFinDespesas").textContent=valorReal(dados.despesas_centavos);
+      $("gFinResultado").textContent=valorReal(dados.resultado_centavos);
+      $("gFinResultado").classList.toggle("text-success",dados.resultado_centavos>=0);
+      $("gEstoqueProduto").replaceChildren(...produtos.map(p=>h("option",{value:p.id},p.nome+" (estoque: "+p.estoque+")")));
+      if(!produtos.length)$("gEstoqueProduto").append(h("option",{value:""},"Cadastre um produto primeiro"));
+      const max=Math.max(1,...dados.grafico.flatMap(x=>[x.receita,x.despesas]));
+      const graf=$("gFinGrafico");graf.replaceChildren();
+      for(const item of dados.grafico){
+        const coluna=h("div",{class:"d-flex flex-column align-items-center justify-content-end flex-shrink-0",style:"width:52px;height:190px"});
+        const barras=h("div",{class:"d-flex align-items-end gap-1",style:"height:155px"});
+        barras.append(h("div",{title:"Receita: "+valorReal(item.receita),class:"rounded-top bg-success",style:"width:14px;height:"+Math.max(2,item.receita/max*145)+"px"}));
+        barras.append(h("div",{title:"Despesas: "+valorReal(item.despesas),class:"rounded-top bg-danger",style:"width:14px;height:"+Math.max(2,item.despesas/max*145)+"px"}));
+        coluna.append(barras,h("span",{class:"small text-secondary mt-2"},item.mes.slice(5)));
+        graf.append(coluna);
+      }
+      const mais=$("gFinMaisVendidos");mais.replaceChildren();
+      if(!dados.mais_vendidos.length)mais.append(h("p",{class:"text-secondary"},"Ainda não há vendas com pagamento confirmado."));
+      dados.mais_vendidos.forEach((p,i)=>{
+        const linha=h("div",{class:"d-flex justify-content-between gap-2 border-bottom border-secondary py-2"});
+        linha.append(h("span",{},(i+1)+". "+p.nome),h("strong",{},p.quantidade+" un."));
+        mais.append(linha);
+      });
+      const hist=$("gFinHistorico");hist.replaceChildren();
+      if(!dados.despesas.length)hist.append(h("p",{class:"text-secondary"},"Nenhuma despesa registrada."));
+      else dados.despesas.forEach(d=>{
+        const linha=h("div",{class:"d-flex flex-wrap justify-content-between gap-2 border-bottom border-secondary py-2"});
+        linha.append(h("span",{},d.data_despesa+" · "+d.descricao),h("strong",{},valorReal(d.valor_centavos)));
+        hist.append(linha);
+      });
+      setMsg(msg,"Dados atualizados. O resultado é uma estimativa baseada em pagamentos confirmados e despesas registradas.","success");
+    } catch(e){setMsg(msg,e.message);}
+  }
+
+  async function registrarCompraEstoque(event){
+    event.preventDefault();
+    const btn=$("gEstoqueCompra").querySelector('[type="submit"]');btn.disabled=true;
+    try{
+      const body={
+        produto_id:Number($("gEstoqueProduto").value),
+        quantidade:Number($("gEstoqueQtd").value),
+        custo_unitario_centavos:Math.round(Number($("gEstoqueCusto").value)*100),
+        data_compra:$("gEstoqueData").value,
+        observacao:$("gEstoqueObs").value.trim()
+      };
+      const result=await api("/admin/estoque/compras",{method:"POST",body:JSON.stringify(body)});
+      $("gEstoqueCompra").reset();
+      $("gEstoqueData").value=new Date().toISOString().slice(0,10);
+      setMsg($("gEstoqueMsg"),"Compra registrada: +"+result.quantidade+" unidades. Total: "+valorReal(result.valor_total_centavos)+".","success");
+      await Promise.all([carregarFinanceiroAdmin(),carregarProdutosAdmin()]);
+    }catch(e){setMsg($("gEstoqueMsg"),e.message);}
+    finally{btn.disabled=false;}
+  }
+
+  async function registrarDespesaFinanceira(event){
+    event.preventDefault();
+    const btn=$("gFinDespesaForm").querySelector('[type="submit"]');btn.disabled=true;
+    try{
+      await api("/admin/financeiro/despesas",{method:"POST",body:JSON.stringify({
+        categoria:$("gFinCategoria").value,
+        descricao:$("gFinDescricao").value.trim(),
+        valor_centavos:Math.round(Number($("gFinValor").value)*100),
+        data_despesa:$("gFinData").value
+      })});
+      $("gFinDespesaForm").reset();
+      $("gFinData").value=new Date().toISOString().slice(0,10);
+      setMsg($("gFinDespesaMsg"),"Despesa registrada.","success");
+      await carregarFinanceiroAdmin();
+    }catch(e){setMsg($("gFinDespesaMsg"),e.message);}
+    finally{btn.disabled=false;}
   }
 
   async function carregarTokensAdmin() {
