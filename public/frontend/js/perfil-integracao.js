@@ -214,13 +214,13 @@
     const botaoNovo = document.getElementById("btnNovoUsuario");
     if (!tabela || !form || !botaoNovo || form.dataset.apiWired) return;
     form.dataset.apiWired = "1";
+    const campo = (id) => document.getElementById(id);
     const opcaoAdmin = campo("usuarioTipo")?.querySelector('option[value="admin"]');
     if (opcaoAdmin) opcaoAdmin.hidden = !ehLider;
     let usuarios = [];
     const fotoObjectUrls = new Set();
     const modalEl = document.getElementById("modalUsuario");
     const modal = window.bootstrap?.Modal && modalEl ? bootstrap.Modal.getOrCreateInstance(modalEl) : null;
-    const campo = (id) => document.getElementById(id);
     const filtros = ["buscarUsuario", "filtroTipoUsuario", "filtroStatusUsuario"];
     const mostrarErro = (msg) => {
       let el = document.getElementById("tc-usuarios-feedback");
