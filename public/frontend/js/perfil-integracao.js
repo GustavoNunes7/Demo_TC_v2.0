@@ -227,6 +227,12 @@
       if (!el) { el = document.createElement("div"); el.id = "tc-usuarios-feedback"; el.className = "alert alert-danger mt-3"; document.getElementById("usuarios")?.prepend(el); }
       el.textContent = msg;
     };
+    const mostrarSucesso = (msg) => {
+      let el = document.getElementById("tc-usuarios-feedback");
+      if (!el) { el = document.createElement("div"); el.id = "tc-usuarios-feedback"; el.className = "alert mt-3"; document.getElementById("usuarios")?.prepend(el); }
+      el.className = "alert alert-success mt-3";
+      el.textContent = msg;
+    };
     async function carregar() {
       try {
         usuarios = await api("/usuarios");
@@ -284,23 +290,48 @@
         for (const valor of [u.nome, u.matricula || "—", u.email, u.admin_lider ? "Administrador Líder" : u.papel === "admin" ? "Administrador" : "Aluno", u.ativo === 0 ? "Inativo" : "Ativo"]) {
           const td = document.createElement("td"); td.textContent = valor || "—"; tr.append(td);
         }
-        const acoes = document.createElement("td"); acoes.className = "text-end text-nowrap";
+        const acoes = document.createElement("td");
+        acoes.className = "text-end";
         if (u.admin_lider) {
-          acoes.textContent = "Líder atual";
+          const liderTag = document.createElement("span");
+          liderTag.className = "badge text-bg-warning";
+          liderTag.textContent = "Líder atual";
+          acoes.append(liderTag);
         } else if (u.papel === "admin" && !ehLider) {
           acoes.textContent = "Protegido";
         } else {
-          const editar = document.createElement("button"); editar.type = "button"; editar.className = "btn btn-sm btn-outline-primary me-1"; editar.textContent = "Editar"; editar.addEventListener("click", () => abrir(u));
-          const statusBtn = document.createElement("button"); statusBtn.type = "button"; statusBtn.className = `btn btn-sm ${u.ativo === 0 ? "btn-outline-success" : "btn-outline-danger"}`; statusBtn.textContent = u.ativo === 0 ? "Ativar" : "Desativar";
-          statusBtn.addEventListener("click", async () => {
+          // Um único menu concentra as operações para evitar vários botões na tabela.
+          const grupo = document.createElement("div");
+          grupo.className = "dropdown d-inline-block";
+          const menuBtn = document.createElement("button");
+          menuBtn.type = "button";
+          menuBtn.className = "btn btn-sm btn-outline-secondary dropdown-toggle";
+          menuBtn.dataset.bsToggle = "dropdown";
+          menuBtn.setAttribute("aria-expanded", "false");
+          menuBtn.textContent = "Ações";
+          const menu = document.createElement("div");
+          menu.className = "dropdown-menu dropdown-menu-end shadow";
+          const acaoMenu = (rotulo, classe, executar) => {
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = "dropdown-item " + (classe || "");
+            item.textContent = rotulo;
+            item.addEventListener("click", executar);
+            menu.append(item);
+          };
+
+          acaoMenu("Editar cadastro", "", () => abrir(u));
+          acaoMenu(u.ativo === 0 ? "Ativar conta" : "Desativar conta", u.ativo === 0 ? "text-success" : "text-warning", async () => {
             if (!confirm(`${u.ativo === 0 ? "Ativar" : "Desativar"} a conta de ${u.nome}?`)) return;
-            try { await api(`/usuarios/${u.id}`, { method: "PATCH", body: JSON.stringify({ ativo: u.ativo === 0 ? 1 : 0 }) }); await carregar(); }
-            catch (e) { mostrarErro(e.message); }
+            try {
+              await api(`/usuarios/${u.id}`, { method: "PATCH", body: JSON.stringify({ ativo: u.ativo === 0 ? 1 : 0 }) });
+              await carregar();
+            } catch (e) { mostrarErro(e.message); }
           });
-          acoes.append(editar, statusBtn);
+
           if (ehLider && u.papel === "admin" && u.ativo !== 0) {
-            const transferir = document.createElement("button"); transferir.type = "button"; transferir.className = "btn btn-sm btn-outline-warning ms-1"; transferir.textContent = "Tornar líder";
-            transferir.addEventListener("click", async () => {
+            menu.append(Object.assign(document.createElement("div"), { className: "dropdown-divider" }));
+            acaoMenu("Transferir liderança", "text-warning", async () => {
               if (!confirm(`Transferir a liderança para ${u.nome}? Você deixará de ser o Administrador Líder.`)) return;
               try {
                 await api("/admin/transferir-lideranca", { method: "POST", body: JSON.stringify({ usuario_id: u.id }) });
@@ -308,14 +339,28 @@
                 location.reload();
               } catch (e) { mostrarErro(e.message); }
             });
-            const remover = document.createElement("button"); remover.type = "button"; remover.className = "btn btn-sm btn-outline-danger ms-1"; remover.textContent = "Remover acesso";
-            remover.addEventListener("click", async () => {
+            acaoMenu("Remover acesso administrativo", "text-danger", async () => {
               if (!confirm(`Remover o acesso administrativo de ${u.nome}? O histórico será preservado.`)) return;
               try { await api(`/usuarios/${u.id}`, { method: "DELETE" }); await carregar(); }
               catch (e) { mostrarErro(e.message); }
             });
-            acoes.append(transferir, remover);
           }
+
+          if (ehLider && u.papel === "aluno") {
+            menu.append(Object.assign(document.createElement("div"), { className: "dropdown-divider" }));
+            acaoMenu("Excluir aluno", "text-danger", async () => {
+              const confirmar = confirm(`Excluir a conta de ${u.nome}? O acesso será bloqueado, os dados pessoais serão anonimizados e o histórico de pedidos e pagamentos será preservado.`);
+              if (!confirmar) return;
+              try {
+                await api(`/usuarios/${u.id}`, { method: "DELETE" });
+                await carregar();
+                mostrarSucesso(`Conta de ${u.nome} removida. O histórico foi preservado.`);
+              } catch (e) { mostrarErro(e.message); }
+            });
+          }
+
+          grupo.append(menuBtn, menu);
+          acoes.append(grupo);
         }
         tr.append(acoes); tabela.append(tr);
       }
