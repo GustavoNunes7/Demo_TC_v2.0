@@ -2528,3 +2528,29 @@ html[data-bs-theme="light"] #modalPagamento h5,
 html[data-bs-theme="light"] #modalPagamento h6,
 html[data-bs-theme="light"] #modalPagamento strong { color:#1e293b !important; }
 html[data-bs-theme="light"] #modalPagamento .bg-secondary-subtle { background:#f6f8fb !important; color:#1e293b !important; border-color:#dbe2ec; }
+
+/* Painel de pedidos — leitura rápida e ações evidentes */
+#pedidos #gPedidos { width:100%; }
+#pedidos #gPedidos > .d-flex { align-items:center; padding:14px 16px; border:1px solid var(--tc-line,#344256); border-radius:14px; background:var(--bg-card,#172235); }
+#pedidos #gFiltroPed { min-height:42px; border-radius:10px; }
+#pedidos #gAtualizar { min-height:42px; border-radius:10px; font-weight:600; }
+#pedidos #gPedTabela { width:100%; overflow-x:auto; border:1px solid var(--tc-line,#344256); border-radius:14px; background:var(--bg-card,#172235); }
+#pedidos #gPedTabela table { margin:0; min-width:980px; vertical-align:middle; }
+#pedidos #gPedTabela thead th { padding:15px 13px; white-space:nowrap; font-size:.76rem; text-transform:uppercase; letter-spacing:.045em; color:var(--tc-muted,#aab5c5); background:rgba(100,116,139,.10); border-bottom:1px solid var(--tc-line,#344256); }
+#pedidos #gPedTabela tbody td { padding:14px 13px; color:var(--tc-ink,#eef2f8); border-color:var(--tc-line,#344256); }
+#pedidos #gPedTabela tbody tr:hover { background:rgba(100,116,139,.08); }
+#pedidos .tc-admin-payment { min-width:175px; padding:9px 11px; border:1px solid var(--tc-line,#344256); border-radius:10px; background:rgba(100,116,139,.08); }
+#pedidos .tc-admin-payment .fw-semibold { font-size:.9rem; }
+#pedidos #gPedTabela .btn { border-radius:9px; font-weight:600; white-space:nowrap; }
+#pedidos #gPedTabela .btn-success { box-shadow:0 3px 12px rgba(25,135,84,.18); }
+html[data-bs-theme="light"] #pedidos #gPedidos > .d-flex,
+html[data-bs-theme="light"] #pedidos #gPedTabela { background:#fff; border-color:#dbe2ec; }
+html[data-bs-theme="light"] #pedidos #gFiltroPed { background:#fff !important; color:#1e293b !important; border-color:#cbd5e1 !important; }
+html[data-bs-theme="light"] #pedidos #gAtualizar { color:#334155 !important; border-color:#94a3b8 !important; }
+html[data-bs-theme="light"] #pedidos #gPedTabela thead th { color:#526174; background:#f1f5f9; border-color:#dbe2ec; }
+html[data-bs-theme="light"] #pedidos #gPedTabela tbody td { color:#1e293b; border-color:#e2e8f0; }
+html[data-bs-theme="light"] #pedidos .tc-admin-payment { background:#f8fafc; border-color:#dbe2ec; }
+@media(max-width:700px) {
+  #pedidos #gPedidos > .d-flex { align-items:stretch; }
+  #pedidos #gFiltroPed, #pedidos #gAtualizar { width:100%; max-width:none !important; }
+}
