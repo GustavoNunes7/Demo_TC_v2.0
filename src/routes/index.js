@@ -84,6 +84,51 @@ r.get("/pedidos/:id", autenticar, (req, res) => {
   res.json(pedido);
 });
 
+// Cria pedido e reserva estoque em uma única transação.
+r.post("/pedidos", autenticar, (req, res) => {
+  const itens = Array.isArray(req.body.itens) ? req.body.itens : [];
+  if (!itens.length || itens.length > 50) return bad(res, "Adicione produtos válidos ao pedido.");
+  const chave = clean(req.get("Idempotency-Key") || req.body.chave_idempotencia, 100);
+  if (chave) {
+    const anterior = db.prepare("SELECT id FROM pedidos WHERE usuario_id=? AND chave_idempotencia=?").get(req.usuario.id, chave);
+    if (anterior) return res.json(detalharPedido(anterior.id));
+  }
+  const normalizados = new Map();
+  for (const item of itens) {
+    const produtoId = positiveId(item.produto_id);
+    const quantidade = Number(item.quantidade);
+    if (!produtoId || !Number.isSafeInteger(quantidade) || quantidade < 1 || quantidade > 100) return bad(res, "Produto ou quantidade inválida.");
+    normalizados.set(produtoId, (normalizados.get(produtoId) || 0) + quantidade);
+  }
+  try {
+    const criar = db.transaction(() => {
+      const pedidoInfo = db.prepare("INSERT INTO pedidos(usuario_id,status,chave_idempotencia) VALUES(?,'pendente',?)").run(req.usuario.id, chave || null);
+      const pedidoId = Number(pedidoInfo.lastInsertRowid);
+      const produtoStmt = db.prepare("SELECT id,nome,preco_centavos,estoque,ativo,excluido FROM produtos WHERE id=?");
+      const reservaStmt = db.prepare("UPDATE produtos SET estoque=estoque-? WHERE id=? AND estoque>=? AND ativo=1 AND excluido=0");
+      const itemStmt = db.prepare("INSERT INTO itens_pedido(pedido_id,produto_id,quantidade,preco_unitario_centavos) VALUES(?,?,?,?)");
+      for (const [produtoId, quantidade] of normalizados) {
+        const produto = produtoStmt.get(produtoId);
+        if (!produto || !produto.ativo || produto.excluido) throw new Error("Um dos produtos não está disponível.");
+        if (produto.estoque < quantidade) throw new Error(`Estoque insuficiente para ${produto.nome}.`);
+        const reserva = reservaStmt.run(quantidade, produtoId, quantidade);
+        if (!reserva.changes) throw new Error(`Não foi possível reservar ${produto.nome}.`);
+        itemStmt.run(pedidoId, produtoId, quantidade, produto.preco_centavos);
+      }
+      return pedidoId;
+    });
+    const pedidoId = criar();
+    notificarAdmins("Novo pedido recebido", `O aluno ${req.usuario.nome || "usuário"} criou o pedido #${pedidoId}.`);
+    return res.status(201).json(detalharPedido(pedidoId));
+  } catch (e) {
+    if (String(e.message).includes("UNIQUE")) {
+      const anterior = chave && db.prepare("SELECT id FROM pedidos WHERE usuario_id=? AND chave_idempotencia=?").get(req.usuario.id, chave);
+      if (anterior) return res.json(detalharPedido(anterior.id));
+    }
+    return bad(res, e.message || "Não foi possível criar o pedido.");
+  }
+});
+
 r.post("/pedidos/:id/pagamento", autenticar, (req, res) => {
   const pedidoId=positiveId(req.params.id), metodo=req.body.metodo;
   if(!allowed(metodo,["pix","cartao","dinheiro"]))return bad(res,"Forma de pagamento inválida.");
