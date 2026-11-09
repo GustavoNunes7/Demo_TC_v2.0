@@ -1069,16 +1069,12 @@
 
     $("modalPagamento").addEventListener("hidden.bs.modal", () => {
       // Quando fecha sem pagar, cancela o pedido
-      if (estadoCompra.pedido && !estadoCompra.pago) {
-        try {
-          api(`/pedidos/${estadoCompra.pedido.id}/cancelar`, {
-            method: "POST",
-          });
-        } catch {
-          /* já tratado */
-        }
+      if (estadoCompra.pedido && !estadoCompra.pago && estadoPagamento.metodo !== "pix") {
+        try { api(`/pedidos/${estadoCompra.pedido.id}/cancelar`, { method: "POST" }); }
+        catch { /* já tratado */ }
         carregarProdutos();
       }
+      // PIX permanece reservado até o prazo de 15 minutos; fechar a janela não cancela a compra.
       resetEstadoCompra();
     });
   }
@@ -1136,16 +1132,10 @@
         },
         "Cancelar"
       ),
-      h(
-        "button",
-        {
-          class: "btn btn-danger",
-          type: "button",
-          id: "pagSimular",
-          onclick: simularPagamento,
-        },
-        "Simular pagamento (modo teste)"
-      )
+      estadoPagamento.metodo === "pix" ? h(
+        "button", { class: "btn btn-danger", type: "button", id: "pagSimular", onclick: simularPagamento },
+        "Simular confirmação PIX (teste)"
+      ) : h("span", { class: "small text-white-50 me-auto" }, "Aguardando confirmação presencial pelo responsável.")
     );
 
     modalPagamento.show();
@@ -1181,7 +1171,11 @@
       h(
         "p",
         { class: "small text-white-50 mb-0" },
-        "Pague com seu banco ou aplicativo de PIX"
+        "Pague com seu banco ou aplicativo de PIX. Após a confirmação do pagamento, o pedido será aprovado e o token será gerado automaticamente."
+      ),
+      h("div", { class: "alert alert-warning mt-3 mb-0 small" },
+        h("i", { class: "bi bi-clock me-2" }),
+        "Você tem 15 minutos para pagar. Fechar esta janela não cancela o pedido."
       )
     );
 
@@ -1197,7 +1191,7 @@
     const bloco = h(
       "div",
       { class: "bg-secondary-subtle p-4 rounded mb-4" },
-      h("p", { class: "text-white-50 small mb-3" }, "Confirme os valores com o responsável:"),
+      h("p", { class: "text-white-50 small mb-3" }, "Leve o valor informado até um responsável da AAPM. O pedido só será aprovado depois que ele confirmar o recebimento:"),
       h(
         "div",
         { class: "small mb-2 d-flex justify-content-between" },
@@ -1238,7 +1232,7 @@
       h(
         "p",
         { class: "small text-white-50 mt-3 mb-0" },
-        "O pagamento será processado com segurança. Você não será solicitado a digitar dados sensíveis nesta tela."
+        "Procure um responsável da AAPM para realizar o pagamento presencial. O pedido será aprovado e o token gerado somente após a confirmação do recebimento."
       )
     );
 
@@ -2351,100 +2345,55 @@
     }
   }
 
+  async function confirmarPagamentoPresencial(id) {
+    if (!confirm(`Confirmar que o pagamento presencial do pedido #${id} foi recebido? O pedido será aprovado e o token será gerado.`)) return;
+    try {
+      await api(`/admin/pagamentos/${id}/confirmar-presencial`, { method: "POST" });
+      setMsg($("gMsg"), `Pagamento do pedido #${id} confirmado. Pedido aprovado e token gerado.`, "success");
+      await carregarPedidosAdmin();
+    } catch (e) { setMsg($("gMsg"), e.message); }
+  }
+
   function renderPedidosAdmin(lista) {
-    const corpo = h(
-      "tbody",
-      {},
-      lista.length
-        ? lista.map((p) => {
-            const tr = h(
-              "tr",
-              {},
-              h("td", {}, "#" + p.id),
-              h(
-                "td",
-                {},
-                h("div", {}, p.cliente),
-                h("div", { class: "small text-secondary" }, p.cliente_email)
-              ),
-              h("td", {}, dataBR(p.criado_em)),
-              h("td", {}, brl(p.total_centavos)),
-              h(
-                "td",
-                {},
-                p.pagamento_status
-                  ? badge(PAG[p.pagamento_status], COR[p.pagamento_status])
-                  : badge("Sem pagamento", "secondary")
-              ),
-              h("td", {}, badge(STATUS[p.status] || p.status, COR[p.status])),
-              h(
-                "td",
-                { class: "text-end text-nowrap" },
-                h(
-                  "button",
-                  {
-                    class: "btn btn-sm btn-outline-secondary me-1",
-                    type: "button",
-                    onclick: () => alternarItens(tr, p.id),
-                  },
-                  "Itens"
-                ),
-                p.status === "pendente" && [
-                  p.pagamento_metodo !== "pix" ? h(
-                    "button",
-                    {
-                      class: "btn btn-sm btn-success me-1",
-                      type: "button",
-                      disabled: p.pagamento_status !== "confirmado",
-                      title:
-                        p.pagamento_status !== "confirmado"
-                          ? "Aguardando pagamento"
-                          : "",
-                      onclick: () => mudarStatus(p.id, "aprovado"),
-                    },
-                    "Aprovar"
-                  ) : null,
-                  h(
-                    "button",
-                    {
-                      class: "btn btn-sm btn-outline-danger",
-                      type: "button",
-                      onclick: () => mudarStatus(p.id, "rejeitado"),
-                    },
-                    "Rejeitar"
-                  ),
-                ],
-                p.status === "aprovado"
-                  ? h(
-                      "button",
-                      {
-                        class: "btn btn-sm btn-info",
-                        type: "button",
-                        onclick: () => mudarStatus(p.id, "entregue"),
-                      },
-                      "Marcar entregue"
-                    )
-                  : null
-              )
-            );
-            return tr;
-          })
-        : h(
-            "tr",
-            {},
-            h(
-              "td",
-              { colspan: 7, class: "text-center text-secondary" },
-              "Nenhum pedido encontrado."
-            )
-          )
-    );
-    $("gPedTabela").replaceChildren(
-      tabela(
-        ["Pedido", "Cliente", "Data", "Total", "Pagamento", "Status", ""],
-        corpo
-      )
-    );
+    const corpo = h("tbody", {}, lista.length ? lista.map((p) => {
+      const metodo = p.pagamento_metodo === "pix" ? "PIX" :
+        p.pagamento_metodo === "cartao" ? (p.tipo_cartao === "credito" ? "Cartão · Crédito" : p.tipo_cartao === "debito" ? "Cartão · Débito" : "Cartão") :
+        p.pagamento_metodo === "dinheiro" ? "Dinheiro" : "Não informado";
+      const detalhes = [];
+      if (p.pagamento_metodo === "dinheiro" && p.valor_entregue_centavos != null) {
+        detalhes.push("Entregue: " + brl(p.valor_entregue_centavos));
+        detalhes.push("Troco: " + brl(p.troco_centavos || 0));
+      }
+      if (p.pagamento_metodo === "pix" && p.pagamento_status === "pendente" && p.pagamento_expira_em) {
+        detalhes.push("Prazo até " + new Date(Number(p.pagamento_expira_em)).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}));
+      }
+      const pagamentoCell = h("div", {class:"tc-admin-payment"},
+        h("div",{class:"fw-semibold"},metodo),
+        h("div",{class:"small mt-1"},p.pagamento_status ? badge(PAG[p.pagamento_status] || p.pagamento_status,COR[p.pagamento_status] || "secondary") : badge("Sem pagamento","secondary")),
+        ...detalhes.map(x=>h("div",{class:"small text-secondary mt-1"},x))
+      );
+      const tr = h("tr",{},
+        h("td",{},"#"+p.id),
+        h("td",{},h("div",{},p.cliente),h("div",{class:"small text-secondary"},p.cliente_email)),
+        h("td",{},dataBR(p.criado_em)),
+        h("td",{},brl(p.total_centavos)),
+        h("td",{},pagamentoCell),
+        h("td",{},badge(STATUS[p.status]||p.status,COR[p.status])),
+        h("td",{class:"text-end"},h("div",{class:"d-flex justify-content-end align-items-center gap-1 flex-wrap"},
+          h("button",{class:"btn btn-sm btn-outline-secondary",type:"button",onclick:()=>alternarItens(tr,p.id)},"Itens"),
+          ...(p.status==="pendente" && ["cartao","dinheiro"].includes(p.pagamento_metodo) && p.pagamento_status==="pendente"
+            ? [h("button",{class:"btn btn-sm btn-success",type:"button",onclick:()=>confirmarPagamentoPresencial(p.pagamento_id)},"Confirmar recebimento")]
+            : p.status==="pendente" && p.pagamento_metodo==="pix" && p.pagamento_status==="pendente"
+              ? [h("span",{class:"small text-warning"},"Aguardando PIX")]
+              : p.status==="aprovado"
+                ? [h("button",{class:"btn btn-sm btn-info",type:"button",onclick:()=>mudarStatus(p.id,"entregue")},"Marcar entregue")]
+                : []),
+          ...(p.status==="pendente" && p.pagamento_metodo!=="pix" ? [h("button",{class:"btn btn-sm btn-outline-danger",type:"button",onclick:()=>mudarStatus(p.id,"rejeitado")},"Rejeitar")] : [])
+        ))
+      );
+      return tr;
+    }) : h("tr",{},h("td",{colspan:7,class:"text-center text-secondary py-4"},"Nenhum pedido encontrado.")));
+    $("gPedTabela").replaceChildren(tabela(["Pedido","Cliente","Data","Total","Forma de pagamento","Status","Ações"],corpo));
   }
 
   function sincronizarGerente() {
