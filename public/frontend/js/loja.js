@@ -1526,6 +1526,29 @@
               color:var(--fin-text)!important;min-width:0
             }
             #gFinanceiro .tc-fin-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+            /* Contraste reforçado: evita textos azul-acinzentados quase invisíveis no tema escuro */
+            #gFinanceiro .tc-pie-item,#gFinanceiro .tc-pie-item strong,
+            #gFinanceiro .tc-pie-item-name span,#gFinanceiro .tc-fin-list-row,
+            #gFinanceiro .tc-fin-list-row span,#gFinanceiro .tc-fin-list-row strong,
+            #gFinanceiro .tc-fin-list-row .small,#gFinanceiro .tc-panel-note,
+            #gFinanceiro .tc-kpi-label,#gFinanceiro .tc-kpi-note,
+            #gFinanceiro .tc-stock-stat span,#gFinanceiro label,
+            #gFinanceiro .tc-fin-table td{color:var(--fin-text)!important}
+            #gFinanceiro .tc-panel-note,#gFinanceiro .tc-kpi-note,
+            #gFinanceiro .tc-stock-stat span{color:var(--fin-muted)!important}
+            #gFinanceiro .tc-pie-item strong,#gFinanceiro .tc-fin-list-row strong{font-weight:750}
+            #gFinanceiro .tc-pie-item-name span,#gFinanceiro .tc-fin-list-row .text-truncate{color:var(--fin-text)!important}
+            #gFinanceiro .tc-fin-alerts{display:grid;gap:9px}
+            #gFinanceiro .tc-alert{display:flex;align-items:flex-start;gap:11px;padding:13px 15px;border:1px solid var(--alert-border);border-left:4px solid var(--alert-accent);border-radius:11px;background:var(--alert-bg);color:var(--fin-text)}
+            #gFinanceiro .tc-alert-icon{font-size:1.05rem;line-height:1.35;color:var(--alert-accent);flex:0 0 auto}
+            #gFinanceiro .tc-alert strong{display:block;color:var(--fin-text)!important;font-size:.87rem}
+            #gFinanceiro .tc-alert p{margin:3px 0 0;color:var(--fin-muted)!important;font-size:.79rem;line-height:1.45}
+            #gFinanceiro .tc-alert-warning{--alert-bg:rgba(245,174,55,.10);--alert-border:rgba(245,174,55,.28);--alert-accent:#f0b43c}
+            #gFinanceiro .tc-alert-danger{--alert-bg:rgba(239,91,112,.10);--alert-border:rgba(239,91,112,.3);--alert-accent:#ff718c}
+            #gFinanceiro .tc-alert-info{--alert-bg:rgba(65,145,230,.10);--alert-border:rgba(65,145,230,.28);--alert-accent:#68a9ff}
+            #gFinanceiro .tc-stock-out{color:var(--fin-red)!important;font-weight:750}
+            #gFinanceiro .tc-stock-low{color:#f0b43c!important;font-weight:750}
+
             #gFinanceiro .tc-fin-head h3{font-size:1.45rem;letter-spacing:-.035em;color:var(--fin-text)!important}
             #gFinanceiro .tc-fin-sub,#gFinanceiro .tc-panel-note{color:var(--fin-muted)!important;font-size:.8rem}
             #gFinanceiro .tc-card{background:var(--fin-card)!important;color:var(--fin-text)!important;border:1px solid var(--fin-border)!important;border-radius:15px;padding:19px;height:100%;box-shadow:var(--fin-shadow);min-width:0}
@@ -1604,6 +1627,11 @@
             html[data-bs-theme="light"] #gFinanceiro .tc-fin-btn{background:#078d72;border-color:#078d72}
             html[data-bs-theme="light"] #gFinanceiro .tc-rank{background:#e6f7f2;color:#078d72}
             html[data-bs-theme="light"] #gFinanceiro .tc-progress{background:#edf2f6}
+            html[data-bs-theme="light"] #gFinanceiro .tc-alert-warning{--alert-bg:#fff8e8;--alert-border:#f3d99c;--alert-accent:#986400}
+            html[data-bs-theme="light"] #gFinanceiro .tc-alert-danger{--alert-bg:#fff0f1;--alert-border:#f1c0c5;--alert-accent:#b4233c}
+            html[data-bs-theme="light"] #gFinanceiro .tc-alert-info{--alert-bg:#eef6ff;--alert-border:#c5dcf7;--alert-accent:#245fa5}
+            html[data-bs-theme="light"] #gFinanceiro .tc-stock-out{color:#b4233c!important}
+            html[data-bs-theme="light"] #gFinanceiro .tc-stock-low{color:#986400!important}
           </style>  </style>
           <div class="tc-fin-head">
             <div><h3 class="fw-bold mb-1">Visão financeira</h3><div class="tc-fin-sub">Acompanhe receitas, despesas, vendas e movimentações do estoque.</div></div>
@@ -1613,6 +1641,7 @@
               <button type="button" class="btn tc-fin-btn px-3" id="gFinAtualizar"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button>
             </div>
           </div>
+          <div id="gFinAlertas" class="tc-fin-alerts mb-3" aria-live="polite"></div>
           <div class="row g-3 mb-3">
             <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#e2fbf4"><div class="tc-kpi-label"><i class="bi bi-graph-up-arrow me-1 text-success"></i>Receita confirmada</div><div class="tc-kpi-value text-success" id="gFinReceita">R$ 0,00</div><div class="tc-kpi-note">Pagamentos confirmados no mês</div></div></div>
             <div class="col-12 col-sm-6 col-xl-3"><div class="tc-card tc-kpi" style="--tc-tint:#fff0f0"><div class="tc-kpi-label"><i class="bi bi-arrow-down-right me-1 text-danger"></i>Despesas</div><div class="tc-kpi-value text-danger" id="gFinDespesas">R$ 0,00</div><div class="tc-kpi-note">Despesas registradas no mês</div></div></div>
@@ -1846,16 +1875,48 @@
         graf.append(coluna);
       }
       const estoque=dados.estoque||{};
+      const alertas=[];
+      const receita=Number(dados.receita_centavos||0),despesas=Number(dados.despesas_centavos||0);
+      const mesesGrafico=dados.grafico||[];
+      const mesAtual=mesesGrafico[mesesGrafico.length-1]||{};
+      const mesAnterior=mesesGrafico[mesesGrafico.length-2]||{};
+      if(receita===0&&despesas>0){
+        alertas.push({tipo:"danger",icone:"bi-cash-coin",titulo:"Nenhuma receita confirmada neste mês",texto:"Há custos registrados, mas ainda não existem pagamentos confirmados no período."});
+      }else if(Number(mesAnterior.receita||0)>0&&receita<Number(mesAnterior.receita)*.5){
+        alertas.push({tipo:"warning",icone:"bi-graph-down-arrow",titulo:"Receita abaixo do mês anterior",texto:"A renda confirmada caiu mais de 50% em relação ao mês anterior. Acompanhe as entradas."});
+      }
+      if(receita>0&&despesas/receita>=1){
+        alertas.push({tipo:"danger",icone:"bi-exclamation-triangle",titulo:"Custos acima da receita",texto:"As despesas já representam "+(despesas/receita*100).toLocaleString("pt-BR",{maximumFractionDigits:1})+"% da receita. O resultado do mês está negativo ou zerado."});
+      }else if(receita>0&&despesas/receita>=.7){
+        alertas.push({tipo:"warning",icone:"bi-exclamation-circle",titulo:"Atenção aos custos",texto:"As despesas consomem "+(despesas/receita*100).toLocaleString("pt-BR",{maximumFractionDigits:1})+"% da receita. Revise os gastos antes de assumir novos custos."});
+      }
+      const semEstoque=produtos.filter(p=>p.ativo!==false&&Number(p.estoque)<=0);
+      const estoqueBaixo=produtos.filter(p=>p.ativo!==false&&Number(p.estoque)>0&&Number(p.estoque)<=3);
+      if(semEstoque.length){
+        alertas.push({tipo:"danger",icone:"bi-box-seam",titulo:semEstoque.length+" produto(s) sem estoque",texto:"Reposição necessária: "+semEstoque.slice(0,5).map(p=>p.nome).join(", ")+(semEstoque.length>5?" e mais "+(semEstoque.length-5):"")+". Confira as compras para voltar a disponibilizá-los."});
+      }
+      if(estoqueBaixo.length){
+        alertas.push({tipo:"warning",icone:"bi-box2",titulo:estoqueBaixo.length+" produto(s) com estoque baixo",texto:"Estes produtos têm até 3 unidades: "+estoqueBaixo.slice(0,5).map(p=>p.nome+" ("+p.estoque+")").join(", ")+". Considere comprar mais."});
+      }
+      const areaAlertas=$("gFinAlertas");areaAlertas.replaceChildren();
+      if(!alertas.length){
+        areaAlertas.append(h("div",{class:"tc-alert tc-alert-info"},h("i",{class:"bi bi-check-circle tc-alert-icon"}),h("div",{},h("strong",{},"Tudo sob controle"),h("p",{},"Não há alertas financeiros ou de estoque para este período."))));
+      }else{
+        alertas.forEach(a=>areaAlertas.append(h("div",{class:"tc-alert tc-alert-"+a.tipo},h("i",{class:"bi "+a.icone+" tc-alert-icon"}),h("div",{},h("strong",{},a.titulo),h("p",{},a.texto)))));
+      }
       $("gFinUnidades").textContent=Number(estoque.unidades||0).toLocaleString("pt-BR");
       $("gFinEstoqueBaixo").textContent=Number(estoque.baixo||0).toLocaleString("pt-BR");
       $("gFinEstoqueProdutos").textContent=Number(estoque.produtos||0).toLocaleString("pt-BR");
       $("gFinEstoqueBaixoCard").textContent=Number(estoque.baixo||0).toLocaleString("pt-BR");
-      const baixo=produtos.filter(p=>Number(p.estoque)<=3);
+      const baixo=produtos.filter(p=>p.ativo!==false&&Number(p.estoque)<=3);
       const listaEstoque=$("gFinEstoqueLista");listaEstoque.replaceChildren();
-      if(!baixo.length) listaEstoque.append(h("div",{class:"text-success py-2"},"Todos os produtos estão com estoque acima do limite mínimo."));
-      baixo.slice(0,6).forEach(p=>{
+      if(!baixo.length) listaEstoque.append(h("div",{class:"text-success py-2"},"Todos os produtos estão acima do limite mínimo de estoque."));
+      baixo.slice(0,8).forEach(p=>{
+        const qtd=Number(p.estoque)||0;
         const linha=h("div",{class:"tc-fin-list-row"});
-        linha.append(h("span",{class:"text-truncate",style:"color:#34495a"},p.nome),h("strong",{class:"text-danger flex-shrink-0"},Number(p.estoque)+" un."));
+        const nome=h("span",{class:"text-truncate",style:"min-width:0"},p.nome);
+        const status=h("strong",{class:"flex-shrink-0 "+(qtd<=0?"tc-stock-out":"tc-stock-low")},qtd<=0?"ESGOTADO":qtd+" un. · Repor");
+        linha.append(nome,status);
         listaEstoque.append(linha);
       });
       const mais=$( "gFinMaisVendidos");mais.replaceChildren();
@@ -1905,16 +1966,16 @@
         fatias.forEach(f=>{
           const item=h("div",{class:"tc-pie-item"});
           const nome=h("span",{class:"tc-pie-item-name"});
-          nome.append(h("i",{class:"tc-pie-swatch",style:"background:"+cores[f.i]}),h("span",{class:"text-truncate",style:"color:#536575"},f.p.nome));
-          item.append(nome,h("strong",{style:"color:#203447"},f.percentual.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%"));
+          nome.append(h("i",{class:"tc-pie-swatch",style:"background:"+cores[f.i]}),h("span",{class:"text-truncate"},f.p.nome));
+          item.append(nome,h("strong",{},f.percentual.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%"));
           legenda.append(item);
         });
         pizza.append(donut,legenda);
         fatias.forEach((f)=>{
           const linha=h("div",{class:"tc-fin-list-row"});
           const esquerda=h("div",{class:"d-flex align-items-center gap-2 flex-grow-1",style:"min-width:0"});
-          esquerda.append(h("span",{class:"tc-rank"},String(f.i+1)),h("div",{class:"flex-grow-1",style:"min-width:0"},h("div",{class:"small fw-semibold text-truncate",style:"color:#34495a"},f.p.nome),h("div",{class:"tc-progress"},h("span",{style:"width:"+f.percentual+"%;background:"+cores[f.i]}))));
-          linha.append(esquerda,h("div",{class:"text-end flex-shrink-0"},h("strong",{class:"small",style:"color:#203447"},Number(f.p.quantidade).toLocaleString("pt-BR")+" un."),h("div",{class:"tc-panel-note"},f.percentual.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%")));
+          esquerda.append(h("span",{class:"tc-rank"},String(f.i+1)),h("div",{class:"flex-grow-1",style:"min-width:0"},h("div",{class:"small fw-semibold text-truncate"},f.p.nome),h("div",{class:"tc-progress"},h("span",{style:"width:"+f.percentual+"%;background:"+cores[f.i]}))));
+          linha.append(esquerda,h("div",{class:"text-end flex-shrink-0"},h("strong",{class:"small"},Number(f.p.quantidade).toLocaleString("pt-BR")+" un."),h("div",{class:"tc-panel-note"},f.percentual.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%")));
           mais.append(linha);
         });
       }
