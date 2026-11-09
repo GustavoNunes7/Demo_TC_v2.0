@@ -2262,8 +2262,8 @@
   async function confirmarPagamentoPresencial(id) {
     if (!confirm(`Confirmar o recebimento presencial do pedido #${id}?`)) return;
     try {
-      await api(`/admin/pagamentos/${id}/confirmar-presencial`, { method: "POST" });
-      setMsg($("gMsg"), `Pagamento do pedido #${id} confirmado. Token gerado.`, "success");
+      await api(`/admin/pedidos/${id}/confirmar`, { method: "POST" });
+      setMsg($("gMsg"), `Pedido #${id} confirmado. Receita registrada no financeiro e token gerado.`, "success");
       await carregarPedidosAdmin();
     } catch (e) {
       setMsg($("gMsg"), e.message);
@@ -2368,7 +2368,7 @@
                     ? h("button", {
                         class: "btn btn-sm btn-success me-1",
                         type: "button",
-                        onclick: () => confirmarPagamentoPresencial(p.pagamento_id),
+                        onclick: () => confirmarPagamentoPresencial(p.id),
                       }, "Confirmar recebimento")
                     : null,
                   h("button", {
